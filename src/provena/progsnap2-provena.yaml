@@ -1,0 +1,641 @@
+version: "1.0"
+
+enum_types:
+  - name: CodeStateRepresentation
+    values:
+      - name: Table
+        description: CodeStates will be stored in a CodeStates table along with other tables in the database.
+      - name: Directory
+        description: CodeStates will be stored in individual folders, with each folder containing all code files, organized by SubjectID.
+      - name: Git
+        description: CodeStates will be stored in Git repositories, with commit hashes used as CodeStateIDs, organized by SubjectID and ProjectID.
+      - name: Keystroke
+        description: Rather than directly storing Codestates, the MainTable will contain InsertedText and DeletedText columns tracking keystroke-level insertions and deletions, from which CodeStates can be reconstructed.
+
+  - name: EventInitiator
+    values:
+      - name: UserDirectAction
+        description: Indicates that the user directly instigated the action.
+      - name: UserIndirectAction
+        description: Indicates that the user indirectly instigated an action.
+      - name: ToolReaction
+        description: Indicates that a tool caused the edit as a reaction to something the user did.
+      - name: ToolTimedEvent
+        description: Indicates that a tool caused the edit as part of a time-based event (such as automatically saving every five minutes).
+      - name: InstructorDirectAction
+        description: Indicates that the instructor directly caused the action, potentially remotely.
+      - name: InstructorIndirectAction
+        description: Indicates that the instructor indirectly caused the action, potentially remotely.
+      - name: TeamMemberDirectAction
+        description: Indicates that a team member directly caused the event; for example, if two students are pair-programming on a shared screen.
+      - name: TeamMemberIndirectAction
+        description: Indicates that a team member indirectly caused the event; for example, if two students are pair-programming on a shared screen.
+
+  - name: EventOrderScope
+    values:
+      - name: Global
+        description: Indicates that the Order column values are intended to be meaningful to determine the order of all events (globally) in the dataset.
+      - name: Restricted
+        description: Indicates that the Order column values are only comparable between events with identical values for all of the columns specified by the EventOrderScopeColumns property
+      - name: None
+        description: Indicates that the Order column values should never be assumed to determine an ordering for any events; in other words, the events are not ordered.
+
+  - name: EditType
+    values:
+      - name: Insert
+        description: Indicates that one or more characters or values have been added.
+      - name: Delete
+        description: Indicates that one or more characters of values have been deleted.
+      - name: Replace
+        description: Indicates that one or more characters or values have been replaced by new characters/values.
+      - name: Move
+        description: Indicates that one or more characters or values have been moved to a new location.
+      - name: Paste
+        description: Indicates that one or more characters or values have been pasted into the program.
+      - name: Undo
+        description: Indicates that the most recent edit not of an undo/redo type was undone.
+      - name: Redo
+        description: Indicates that the most recent edit that had been undone was re-done.
+      - name: Refactor
+        description: Indicates that the program has been refactored in some way.
+      - name: Reset
+        description: Indicates that the program has been reset to its start state.
+      - name: GenericEdit
+        description: Any generic edit that can not be described by the edits listed above. If your dataset contains a new category of edits not defined here, we recommend defining a custom value for this enumeration, rather than using GenericEdit.
+
+  - name: CompileResult
+    values:
+      - name: Success
+      - name: Warning
+      - name: Error
+
+  - name: ExecutionResult
+    values:
+      - name: Success
+      - name: Timeout
+      - name: Error
+      - name: TestFailed
+
+  - name: InterventionCategory
+    values:
+      - name: Feedback
+      - name: Hint
+      - name: CodeHighlight
+      - name: CodeChange
+      - name: EarnedGrade
+
+metadata:
+  description: |
+    Every ProgSnap 2 dataset is required to have a metadata table named DatasetMetadata.
+
+    The purpose of this metadata table is to describe the features of the dataset as a whole in a structured, computer-readable format. For unstructured, natural language description of the dataset, use the README.md file. The table has two columns named Property and Value.  Each row in the table indicates the value of one property.  Each property has a default value; any property not explicitly defined in this table is assumed to have the default value. The following properties are defined
+  properties:
+    - name: Version
+      datatype: String
+      default_value: "1.0"
+      description: |
+        This property specifies the current version of the ProgSnap 2 standard that these files adhere to. This allows the standard to change over time. ProgSnap2 versions use semantic versioning and should therefore be string values.
+
+    - name: IsEventOrderingConsistent
+      datatype: Boolean
+      default_value: false
+      description: |
+        This property specifies whether the events in the main event table are predominantly ordered (within the scope specified by the EventOrderScope property) according to a single, globally-consistent clock, such that the ordering of the events in the same scope can (largely) be assumed to reflect their actual temporal order according to that clock.  Datasets originating from distributed systems (including client/server systems) might not have a single clock, in which case the value of this property should be false.
+
+        Note that data consumers should be prepared to handle anomalies in event ordering, even if this property value is set to true.
+
+    - name: EventOrderScope
+      datatype: Enum
+      default_value: None
+      description: |
+        This property specifies the scope of Order column values within the dataset.  The possible values are Global, Restricted, and None.  When the value is Global, the Order column values are intended to be meaningful to determine the order of all events (globally) in the dataset.  When the value is Restricted, Order column values are only comparable between events with identical values for all of the columns specified by the EventOrderScopeColumns property.  When the value is None, the Order column values should never be assumed to determine an ordering for any events; in other words, the events are not ordered.
+
+    - name: EventOrderScopeColumns
+      datatype: String
+      default_value: ''
+      description:
+        This property specifies the main event table columns which define the scope of meaningful comparisons of Order column values.  This property must be set to a non-empty value if the EventOrderScope property has the value "Restricted".  (This property has no significance if EventOrderScope is not "Restricted".)  (This property has no significance if EventOrderScope is not "Restricted".)  The value of this column is a semicolon-separated list of main event table column names.
+        See more information in the full specification.
+
+    - name: CodeStateRepresentation
+      datatype: Enum
+      default_value: Table
+      description: |
+        This property specifies which CodeState representation is used by the dataset.
+
+    - name: ProgramInputLinkTable
+      datatype: String
+      default_value: ''
+      description: |
+        This property specifies the name of the LinkTable that contains columns describing program input, if these are contained in a separate table rather than as columns in the MainTable. If they are included in the MainTable, this value should be the empty string.
+
+main_table:
+  description: |
+    The core component of a ProgSnap 2 dataset is a the MainTable. Each row of the this table represents an event that occurred.
+  columns:
+    # --- Required Universal Columns ---
+
+    - name: EventType
+      requirement: Required
+      datatype: Enum
+      description: |
+        Every line logged in a dataset must be associated with a specific event, where events can be categorized as one of several possible types. Users are encouraged to apply the built-in enum values whenever possible, but if a new event type is necessary, the coder may define a new enum type beginning with the string "X-". The metadata of the associated dataset should define what the new EventTypes mean.
+
+    - name: EventID
+      requirement: Required
+      datatype: ID
+      description: |
+        Every event must have an ID value that is distinct from (not equal to) all other events in the main event table.
+
+    - name: CodeStateID
+      requirement: Required # TODO: This will break the current setup...
+      datatype: ID
+      description: |
+        Each event should contain a pointer to the current state of the student's codebase. If the code has not changed since the previous event, the previous CodeStateID may be reused. If the CodeState has changed but has not been recorded (e.g. a File.Edit event occurs, but the updated code was not logged), then CodeStateID should be left blank to indicate that it is unknown. More information about how to represent CodeStates can be found further below in the document.
+
+    - name: SubjectID
+      requirement: Required
+      datatype: ID
+      description: |
+        An ID representing the subject associated with the event. Whenever possible, the SubjectID should represent a single individual (i.e., a student.) A SubjectID could represent a group of individuals (i.e., a team) if the event truly originates from the group as a whole and is not directly associated with a single individual within the group.
+
+        SubjectID values and TeamID values are considered to be in the same namespace. For events where SubjectID and TeamID have the same value, it means that the event is ascribed to a team as a whole rather than any specific member of the team.
+
+        When it is not known who the subject associated with an event is, the special ID "UNKNOWN" should be used. This ID should not be used for regular subjects, and should be treated as missing information during analysis.
+
+    - name: ToolInstances
+      requirement: Required
+      datatype: String
+      description: |
+        A semicolon-separated list of tool instance identifiers active at the time of the event.
+
+    # --- Optional Universal Columns ---
+
+    - name: Order
+      requirement: Optional
+      datatype: Integer
+      description: |
+        An integer used to impose a partial ordering on events, typically for analysis or visualization.
+
+    - name: ClientTimestamp
+      requirement: Optional
+      datatype: Timestamp
+      description: |
+        The timestamp recorded by the client machine when the event occurred.
+
+    - name: ServerTimestamp
+      requirement: Optional
+      datatype: Timestamp
+      description: |
+        A ServerTimestamp value indicates the time when an event was logged on a server system.  In general, it is expected that servers will have clocks that are (to a reasonable degree) accurately synchronized with global time standards (e.g., using NTP), although this cannot be guaranteed.  Also, in cases where there are multiple servers, their clocks may not be completely synchronized with each other.
+
+    - name: CourseID
+      requirement: Optional
+      datatype: ID
+      description: |
+        Students are usually associated with a specific course that they are learning in. This course must be given an ID that is shared across all students enrolled in the course, but distinct from different courses in the same dataset. We define courses to be different when they teach different content (e.g., CS1 vs CS2). Note that a course which takes place over several terms with different students should be given the same ID across all terms; the datasets will be distinguished by their TermIDs.
+
+        We recommend that CourseIDs be at least somewhat anonymized, to avoid making student data identifiable.
+
+    - name: CourseSectionID
+      requirement: Optional
+      datatype: ID
+      description: |
+        Courses are often split up into smaller sections of students who primarily interact with each other and a specific TA. If applicable, each section should be given a distinct ID (unique from other sections in the given course and other courses). CourseSections should not share IDs across terms.
+
+        We recommend that CourseSectionIDs be at least somewhat anonymized, to avoid making student data identifiable.
+
+    - name: TermID
+      requirement: Optional
+      datatype: ID
+      description: |
+        The term in which the course took place. Can be written as needed, but we recommend the format '<Semester> <Year>'; for example, 'Spring 2018'.
+
+    - name: AssignmentID
+      requirement: Optional
+      datatype: ID
+      description: |
+        CodeStates are often associated with a specific assignment that is composed of one or more programming problems. Each unique assignment must be given a distinct ID from other assignments in the associated course and other courses. If an assignment is identical to an assignment in a previous term of the course or another course, they should be given the same ID, but any changes in the assignment should result in a changed ID.
+
+        If the CodeState represents free-form student work not associated with a specific assignment or problem, this value should be empty. Stand-alone problems also do not need to be associated with assignments.
+
+    - name: ProblemID
+      requirement: Optional
+      datatype: ID
+      description: |
+        The identifier for the programming problem associated with the event. Each unique problem must have its own identifier that is distinct from other identifiers in the same column that correspond to different problems. If a record specifying a ProblemID also specifies an AssignmentID, it means that the problem is part of the specified assignment. There is no requirement that problems are associated with an assignment: for example, a standalone practice problem might not be considered to be part of an assignment.
+
+    - name: Attempt
+      requirement: Optional
+      datatype: Integer
+      description: |
+        If a student attempts a problem more than once, this value is used to identify which attempt they're on. It should start at 1, then increase by 1 on each following attempt.
+
+    - name: ExperimentalCondition
+      requirement: Optional
+      datatype: String
+      description: |
+        If this data was logged as part of an experiment, this column can be used to specify the experimental condition that the event took place in. Condition names must be consistent for events in the same condition, and (if possible) distinct between different experiments. This can be accomplished by assigning each experiment in the dataset a distinct name. An example condition string is "02/18 Parsons Problem Study: Control"; this establishes the condition (control case), the study content (parsons problems), and when the study took place (February 2018).
+
+    - name: LoggingErrorID
+      requirement: Optional
+      datatype: ID
+      description: |
+        Logging errors are an inevitable part of the data collection process. If a data collector finds that an error occurred during the logging process, they should leave the data in its original state, but annotate all erroneous data with IDs, where each ID corresponds to a specific logging error event. Further information about the error can then be provided in a link table (which should include the ID, error type, and an explanation).
+
+        Note that logging errors can come in many forms, including corrupted/lost data, server downtime, and tool errors that result in incorrect feedback. We define a logging error to be anything that results in the log not accurately representing the true state of the world.
+
+    # --- Event-specific Columns ---
+
+    - name: ParentEventID
+      requirement: EventSpecific
+      datatype: ID
+      description: |
+        Certain events are hierarchical, where multiple child events might be associated with a single parent event. In these cases, the parent event should be referenced in this column by its EventID value.
+
+    - name: SessionID
+      requirement: EventSpecific
+      datatype: ID
+      description: |
+        A session is generally defined as a distinct period of time during which a student is interacting with a tool/program. Sessions are somewhat ill-defined and may vary across datasets. Session IDs must be unique across subjects and across distinct sessions. This ID may be the EventID of the SessionStart event that initiated the session, or it may be derived independently.
+
+    - name: ProjectID
+      requirement: EventSpecific
+      datatype: ID
+      description: |
+        A project is a collection of source files that can be opened and closed (in Project.* events). Note that a project may be distinct from an assignment or problem. For example, one assignment might extend another, in which case the student will load the same project and continue working on it.
+
+        Data producers should only generate Project.* events and ProjectID values if the underlying data source has an explicit concept of "project".
+
+    - name: ResourceID
+      requirement: EventSpecific
+      datatype: ID
+      description: |
+        Often students access resources while working on problems. Example resources include API documentation, online textbooks, and demo videos. In a dataset which logs student access to resources, each resource must be assigned a distinct ID. If resources are not changed across terms, their IDs should be reused.
+
+    - name: CodeStateSection
+      requirement: EventSpecific
+      datatype: SourceLocation
+      description: |
+        A CodeStateSection value names a single file or resource within a CodeState which is specifically associated with the event.  Examples:
+        * In a File.Create event, the CodeStateSection identifies the file created
+        * In a Compile.Error event, the CodeStateSection identifies the source file in which the compilation error occurs
+
+        Note that for events where there is both a "source" file/resource and a "destination" file/resource, the CodeStateSection value indicates the "source".  For example, for File.Copy and File.Rename events, the CodeStateSection names the "original" file.  (Note that in the case of File.Rename events, the CodeStateSection value identifies a file or resource in the previous CodeState.)
+
+        Note that a CodeStateSection may only refer to a single file.  Cases where multiple resources are accessed or modified at the same time (such as using "Save All" to save all files) should be represented as multiple events, each with its own distinct CodeStateSection.
+
+        Also note that CodeStateSections should not be used for CodeStates in the Table format, as all table data is contained in the same file.
+
+    - name: DestinationCodeStateSection
+      requirement: EventSpecific
+      datatype: SourceLocation
+      description: |
+        For events associated with two files or resources — a "source" and a "destination" — the DestinationCodeStateSection value specifies the destination resource.  For example, for File.Copy and File.Rename events, the DestinationCodeStateSection value specifies the "new" file or resource.
+
+        Note that this column should only contain a nonempty value if the CodeStateSection column contains a nonempty value.
+
+
+    - name: EventInitiator
+      requirement: EventSpecific
+      datatype: Enum
+      description: |
+        Events are typically performed by either the user, the tool, or the instructor. When known, this column should specify which one instigated the event.
+        Note that user, instructor, and team members can initiate actions either directly or indirectly. A direct action is one the person purposefully makes (like typing or editing a program with mouse clicks); an indirect action is one that is caused by a user action, but not done directly by the user (like when a user accepts an autocomplete recommendation and the text is filled in).
+
+        Users are encouraged to apply the built-in enum values whenever possible, but if a new value is necessary, the coder may define a new custom enum value and document the new value in the README.md.
+
+    - name: EditType
+      requirement: EventSpecific
+      datatype: Enum
+      description: |
+        This value indicates the type of edit which caused the file to change. Specific values are described in the table below. Additional custom values should be documented in the README.md
+
+    - name: CompileResult
+      requirement: EventSpecific
+      datatype: Enum
+      description: |
+        Compile events can either result in an error, a warning, or a general success.
+
+    - name: CompileMessageType
+      requirement: EventSpecific
+      datatype: String
+      description: |
+        The type/ID of compile message provided. If no error or warning was given, the string “Success” should be used. The types of errors and warnings used will otherwise vary by language; for example, a Python compile message type might be a ‘SyntaxError' or an ‘IndentationError'.
+
+    - name: CompileMessageData
+      requirement: EventSpecific
+      datatype: String
+      description: |
+        The specific compiler message shown to the student.
+
+    - name: SourceLocation
+      requirement: EventSpecific
+      datatype: SourceLocation
+      description: |
+        A SourceLocation value represents a location or region within a source file, associated with a compiler diagnostic, static analysis warning, or other message about program source. It can also describe the location of an edit in source code during File.Edit events. Note that due to the large number of ways file contents could change as a result of a File.Edit event, the SourceLocation value associated with a File.Edit event (if any) should be considered to be a “hint” regarding the location of the change(s) represented by the event. The true change corresponding to a File.Edit event is indicated by the changes to the event's CodeState relative to the previous CodeState.
+
+    - name: ExecutionID
+      requirement: EventSpecific
+      datatype: ID
+      description: |
+        This ID value is used to group Run.Test events that were part of the same overall test execution. For example, if multiple unit tests were executed, resulting in one Run.Test event for each unit test, all of the Run.Test events in the group should share a common ExecutionID value.
+
+        If the code execution is associated with a submission, then the Submit event should have an ExecutionID value, and the associated Run.Test, Debug.Test, and/or Run.Program events should share the same ExecutionID value.
+
+        For consistency, this ID value may also be specified for Run.Program events.
+
+    - name: TestID
+      requirement: EventSpecific
+      datatype: ID
+      description: |
+        An ID indicating which test case is associated with the event. If desired, a link table may map IDs to further information about the individual test cases. Note that TestID values may be human-readable: for example, the names of JUnit tests could be used as TestID values, but they should still be globally unique (not reused across problems).
+
+    - name: ExecutionResult
+      requirement: EventSpecific
+      datatype: Enum
+      description: |
+        Run.Program events can result in Success (the program runs fully to completion), Timeout (the program's execution is interrupted by the user or the system), or Error (the program execution is terminated by a compiler or runtime error).
+
+        Run.Test events can result in Success (the test passes), Timeout (the test failed to complete in the allotted time), Error (the test failed due to a fatal runtime exception), or TestFailed (the test produces the incorrect output). Note that assertion errors should be classified as TestFailed, not Error.
+
+    - name: Score
+      requirement: EventSpecific
+      datatype: Real
+      description: |
+        A Score value ranges between 0.0 and 1.0, and indicates the normalized degree of correctness of the submitted code with respect to a specific test (in the case of a Run.Test event) or with respect to all tests and correctness criteria (in the case of a Submit event), excluding extra credit criteria.
+
+        A completely incorrect test result or submission should be assigned a score of 0.0, and a completely correct test result or submission should be assigned a score of 1.0. If a test result/submission is partially incorrect, it may either have a number in the range [0.0, 1.0) or may be set to 0.0 automatically; this should be specified in the README. In general, it is expected that:
+
+        A Run.Test event will have a Score of 1.0 if the ExecutionResult is Success, and 0.0 otherwise.
+        A Submit event will have a Score that is the average (possibly weighted) of the Score values of the Run.Test events associated with the Submit event (i.e., those having the same ExecutionID value).
+
+        In some sense Score values are redundant, because they could be inferred from analyzing Run.Test events. However, for many types of analysis, having a single Score value directly associated with a Submit event is highly valuable, and data providers are strongly encouraged to include Score values.
+
+        Note that while a Score could be the basis of an assigned grade, there is no implication that a Score is necessarily a grade. It is simply intended to capture the normalized degree of correctness of submitted code.
+
+        Note also that Run.Test events and potentially even Submit events could omit the Score value if they are intended exclusively as extra credit. Also, events can omit the Score value if it is not possible for a score to be calculated immediately (as is the case for creative or manually graded problems). When a manual grade is provided, an EarnedGrade Intervention should be used to log the grade.
+
+    - name: ExtraCreditScore
+      requirement: EventSpecific
+      datatype: Real
+      description: |
+        An ExtraCreditScore value ranges between 0.0 and 1.0, and indicates the degree to which a single test (in the case of Run.Test events) or submission (in the case of Submit events) satisfies extra credit criteria. This column should not contain any value for Run.Test and Submit events that have no extra credit criteria.
+
+    - name: ProgramInput
+      requirement: EventSpecific
+      datatype: URL
+      description: |
+        Programs are often provided with input at the beginning of a run or test. The ProgramInput value specifies the URL which records the program input. There are two possibilities for the resource identified by the URL:
+
+        If the URL refers to a file, the file's contents are the program input. This possibility is intended to handle the case where the program is receiving input via its standard input channel (stdin in C, System.in in Java, etc.)
+
+        If the URL refers to a directory, the directory contains one or more files that constitute the program's input. This possibility is intended to handle the case where the program is receiving input from some combination of files and standard input. The naming and meaning of these files is unspecified; data producers are encouraged to use descriptive names.
+
+        ProgramInput and ProgramOutput are all listed as recommended, not required, for Run.* events. However, data collectors are strongly encouraged to provide information on the input/output whenever possible. These values should only be left blank when it is impossible to present the data directly (for example, if the output is an interactive animation that cannot be stored statically).
+
+    - name: ProgramOutput
+      requirement: EventSpecific
+      datatype: URL
+      description: |
+        Programs often produce output at the end of a run or test. The ProgramOutput value specifies the URL which records the program output. The URL will typically refer to an “internal” file within the dataset's Resources directory. Note that ProgramOutput is intended to capture the “standard” output channel of the program, i.e., stdout in C, cout in C++, System.out in Java, etc.
+
+        ProgramInput and ProgramOutput are all listed as recommended, not required, for Run.* events. However, data collectors are strongly encouraged to provide information on the input/output whenever possible. These values should only be left blank when it is impossible to present the data directly (for example, if the output is an interactive animation that cannot be stored statically).
+
+    - name: ProgramErrorOutput
+      requirement: EventSpecific
+      datatype: URL
+      description: |
+        Programs often produce error output at the end of a run or test. The ProgramErrorOutput value specifies the URL which records the program's error channel output. The URL will typically refer to an “internal” file within the dataset's Resources directory. Note that ProgramErrorOutput is intended to capture the “error” output channel of the program, i.e., stderr in C, cerr in C++, System.err in Java, etc.
+
+    - name: InterventionCategory
+      requirement: EventSpecific
+      datatype: Enum
+      description: |
+        An Intervention event is an interaction with the subject initiated during the programming process; for example, showing the students a targeted feedback message when they fail a specific test case. We include common intervention categories here, but new ones with names starting with the prefix “X-” may be used. Common interventions should be recommended for inclusion in future versions of ProgSnap 2.
+
+        Note that Compile and Run events are not interventions; these events are ubiquitous enough that they have been given their own event types.
+
+    - name: InterventionType
+      requirement: EventSpecific
+      datatype: String
+      description: |
+        System-level information about the type of intervention being performed. For feedback, this might be the type of error or code state that was detected; for CodeHighlight, this might be the starting and ending coordinates of the highlighted code. This can be organized freely by the logger, but the format should be consistent within datasets, and should state the information as succinctly as possible.
+
+    - name: InterventionMessage
+      requirement: EventSpecific
+      datatype: String
+      description: |
+        The actual intervention message shown to the student, when applicable. If no message is shown but a visual effect occurs, the effect should be described (possibly using a dataset-specific coding scheme).
+
+    - name: InsertedText
+      requirement: EventSpecific
+      datatype: String
+      description: |
+        The text inserted by this File.Edit event, if any.
+
+    - name: DeletedText
+      requirement: EventSpecific
+      datatype: String
+      description: |
+        The text deleted by this File.Delete event, if any.
+
+  event_types:
+    - name: Session.Start
+      description: Marks the start of a work session.
+      required_columns:
+        - SessionID
+
+    - name: Session.End
+      description: Marks the end of a work session.
+      required_columns:
+        - SessionID
+
+    - name: Project.Open
+      description: Indicates that a project was opened.
+      required_columns:
+        - ProjectID
+
+    - name: Project.Close
+      description: Indicates that a project was closed due to an explicit user or system action. Data consumers should be prepared to handle cases where Project.Open is not terminated by an explicit Project.Close.
+      required_columns:
+        - ProjectID
+
+    - name: File.Create
+      description: Indicates that a file was created.
+      required_columns:
+        - CodeStateSection
+      optional_columns:
+        - EventInitiator
+
+    - name: File.Delete
+      description: Indicates that a file was deleted.
+      required_columns:
+        - CodeStateSection
+      optional_columns:
+        - EventInitiator
+
+    - name: File.Open
+      description: Indicates that a file was opened.
+      required_columns:
+        - CodeStateSection
+      optional_columns:
+        - EventInitiator
+
+    - name: File.Close
+      description: Indicates that a file was closed.
+      required_columns:
+        - CodeStateSection
+      optional_columns:
+        - EventInitiator
+
+    - name: File.Save
+      description: Indicates that a file was saved.
+      required_columns:
+        - CodeStateSection
+      optional_columns:
+        - EventInitiator
+
+    - name: File.Rename
+      description: Indicates that a file was renamed.
+      required_columns:
+        - CodeStateSection
+        - DestinationCodeStateSection
+      optional_columns:
+        - EventInitiator
+
+    - name: File.Copy
+      description: Indicates that a file was copied.
+      required_columns:
+        - CodeStateSection
+        - DestinationCodeStateSection
+      optional_columns:
+        - EventInitiator
+
+    - name: File.Edit
+      description: Indicates that the contents of a file were edited.
+      required_columns:
+        - CodeStateSection
+        - EditType
+      optional_columns:
+        - EventInitiator
+        - SourceLocation
+        - InsertedText
+        - DeletedText
+
+    - name: File.Focus
+      description: Indicates that a file was selected by the user within the user interface.
+      required_columns:
+        - CodeStateSection
+      optional_columns:
+        - EventInitiator
+
+    - name: Compile
+      description: Indicates an attempt to compile all or part of the code.
+      required_columns:
+        - CodeStateSection
+        - CompileResult
+      optional_columns:
+        - EventInitiator
+
+    - name: Compile.Error
+      description: Represents a compilation error and its associated diagnostic.
+      required_columns:
+        - ParentEventID
+        - CodeStateSection
+        - CompileMessageType
+        - CompileMessageData
+        - SourceLocation
+
+    - name: Compile.Warning
+      description: Represents a compilation warning and its associated diagnostic.
+      required_columns:
+        - ParentEventID
+        - CodeStateSection
+        - CompileMessageType
+        - CompileMessageData
+        - SourceLocation
+
+    - name: Submit
+      description: Indicates that code was submitted to the system.
+      optional_columns:
+        - ExecutionID
+        - Score
+        - ExtraCreditScore
+
+    - name: Run.Program
+      description: Indicates a program execution and its associated input and/or output.
+      required_columns:
+        - ExecutionResult
+      optional_columns:
+        - ExecutionID
+        - Score
+        - ExtraCreditScore
+        - ProgramInput
+        - ProgramOutput
+        - ProgramErrorOutput
+
+    - name: Run.Test
+      description: Indicates execution of a test and its associated input and/or output.
+      required_columns:
+        - ExecutionID
+        - TestID
+        - ExecutionResult
+      optional_columns:
+        - Score
+        - ExtraCreditScore
+        - ProgramInput
+        - ProgramOutput
+        - ProgramErrorOutput
+
+    - name: Debug.Program
+      description: Indicates a debug execution of the program and its associated input and/or output.
+      required_columns:
+        - ExecutionResult
+      optional_columns:
+        - ExecutionID
+        - Score
+        - ExtraCreditScore
+        - ProgramInput
+        - ProgramOutput
+        - ProgramErrorOutput
+
+    - name: Debug.Test
+      description: Indicates a debug execution of a test and its associated input and/or output.
+      required_columns:
+        - ExecutionID
+        - TestID
+        - ExecutionResult
+      optional_columns:
+        - Score
+        - ExtraCreditScore
+        - ProgramInput
+        - ProgramOutput
+        - ProgramErrorOutput
+
+    - name: Resource.View
+      description: Indicates that a resource (typically a learning resource of some type) was viewed.
+      required_columns:
+        - ResourceID
+
+    - name: Intervention
+      description: Indicates that an intervention such as a hint was done.
+      required_columns:
+        - EventInitiator
+        - InterventionCategory
+        - InterventionType
+        - InterventionMessage
+
+
+link_tables:
+  - name: LinkSubject
+    id_column_names:
+      - SubjectID
+    additional_columns:
+      - name: MidtermExamScore
+        requirement: Optional
+        datatype: Real
+        description: |
+          The student's score between 0-1 on the midterm exam.
+    description: |
+      A link table with additional information about each student.

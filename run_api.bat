@@ -1,0 +1,1 @@
+set PYTHONPATH=./src && uvicorn --app-dir ./src provena.main:app --reload --reload-dir ./src/
