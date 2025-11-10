@@ -4,6 +4,7 @@ from fastapi.params import Depends
 from progsnap2.database.reader.sql_reader import SQLReader
 from progsnap2.spec.enums import CoreTables, MainTableColumns as Cols
 from provena.api.read.common import create_reader
+import pandas as pd
 
 from sqlalchemy import select
 
@@ -23,11 +24,18 @@ def get_assignments(reader: SQLReader = Depends(create_reader)):
 def get_assignments(assignment_id: str, reader: SQLReader = Depends(create_reader)):
     manager = reader.get_table_manager()
     main_table = manager.get_table(CoreTables.MainTable)
-    statement = select(main_table.c[Cols.SubjectID].distinct()).where(
+    cols = [
+        Cols.SubjectID,
+        Cols.InsertText,
+        Cols.DeleteText,
+    ]
+    cols = [main_table.c[col] for col in cols]
+    statement = select(*cols).where(
         main_table.c[Cols.AssignmentID] == assignment_id
     )
-    results = reader.get_conn().execute(statement).fetchall()
-    ids = [row[0] for row in results]
+    df = pd.read_sql_query(statement, reader.get_conn())
+    # TODO: Get summary stats instead of all IDs
+    ids = list(set(df[Cols.SubjectID].tolist()))
     return ids
 
 @router.get("/assignments/{assignment_id}/{subject_id}/code_state_sections")
