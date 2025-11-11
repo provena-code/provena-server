@@ -1,3 +1,6 @@
 [submodule "toolbox"]
 	path = toolbox
 	url = https://github.com/CSSPLICE/ProgSnapToolbox.git
+[submodule "provena"]
+	path = provena
+	url = https://github.com/thomaswp/provena-core.git
