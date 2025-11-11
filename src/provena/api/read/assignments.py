@@ -1,8 +1,9 @@
 
 from fastapi import APIRouter
 from fastapi.params import Depends
+from pydantic import BaseModel
 from progsnap2.database.reader.sql_reader import SQLReader
-from progsnap2.spec.enums import CoreTables, MainTableColumns as Cols
+from progsnap2.spec.enums import CoreTables, EventType, MainTableColumns as Cols
 from provena.api.read.common import create_reader
 import pandas as pd
 
@@ -20,8 +21,13 @@ def get_assignments(reader: SQLReader = Depends(create_reader)):
     ids = [row[0] for row in results]
     return ids
 
+class AssignmentSubjectsResponseItem(BaseModel):
+    SubjectID: str
+    InsertTextLength: int
+    DeleteTextLength: int
+
 @router.get("/assignments/{assignment_id}/subjects")
-def get_assignments(assignment_id: str, reader: SQLReader = Depends(create_reader)):
+def get_assignments(assignment_id: str, reader: SQLReader = Depends(create_reader)) -> list[AssignmentSubjectsResponseItem]:
     manager = reader.get_table_manager()
     main_table = manager.get_table(CoreTables.MainTable)
     cols = [
@@ -31,12 +37,19 @@ def get_assignments(assignment_id: str, reader: SQLReader = Depends(create_reade
     ]
     cols = [main_table.c[col] for col in cols]
     statement = select(*cols).where(
-        main_table.c[Cols.AssignmentID] == assignment_id
+        (main_table.c[Cols.AssignmentID] == assignment_id) &
+        (main_table.c[Cols.EventType] == EventType.FileEdit)
     )
-    df = pd.read_sql_query(statement, reader.get_conn())
-    # TODO: Get summary stats instead of all IDs
-    ids = list(set(df[Cols.SubjectID].tolist()))
-    return ids
+    edits = pd.read_sql_query(statement, reader.get_conn())
+    # Get the sum of inserted and deleted text lengths per subject
+    edits[Cols.InsertText + "Length"] = edits[Cols.InsertText].str.len().fillna(0)
+    edits[Cols.DeleteText + "Length"] = edits[Cols.DeleteText].str.len().fillna(0)
+    summary = edits.groupby(Cols.SubjectID).agg({
+        Cols.InsertText + "Length": "sum",
+        Cols.DeleteText + "Length": "sum"
+    }).reset_index()
+    as_dict = summary.to_dict(orient="records")
+    return [AssignmentSubjectsResponseItem(**item) for item in as_dict]
 
 @router.get("/assignments/{assignment_id}/{subject_id}/code_state_sections")
 def get_assignments(

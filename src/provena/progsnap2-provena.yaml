@@ -428,13 +428,13 @@ main_table:
       description: |
         The actual intervention message shown to the student, when applicable. If no message is shown but a visual effect occurs, the effect should be described (possibly using a dataset-specific coding scheme).
 
-    - name: InsertedText
+    - name: InsertText
       requirement: EventSpecific
       datatype: String
       description: |
         The text inserted by this File.Edit event, if any.
 
-    - name: DeletedText
+    - name: DeleteText
       requirement: EventSpecific
       datatype: String
       description: |
@@ -520,8 +520,8 @@ main_table:
       optional_columns:
         - EventInitiator
         - SourceLocation
-        - InsertedText
-        - DeletedText
+        - InsertText
+        - DeleteText
 
     - name: File.Focus
       description: Indicates that a file was selected by the user within the user interface.
