@@ -287,6 +287,12 @@ main_table:
 
         Also note that CodeStateSections should not be used for CodeStates in the Table format, as all table data is contained in the same file.
 
+    - name: Code
+      requirement: EventSpecific
+      datatype: String
+      description: |
+        The contents of the CodeStateSection **after** the given event has occurred.
+
     - name: DestinationCodeStateSection
       requirement: EventSpecific
       datatype: SourceLocation
@@ -440,6 +446,12 @@ main_table:
       description: |
         The text deleted by this File.Delete event, if any.
 
+    - name: DeleteLength
+      requirement: EventSpecific
+      datatype: Real
+      description: |
+        The length of the text deleted by this File.Delete event, if any. Can be used in place of DeleteText.
+
   event_types:
     - name: Session.Start
       description: Marks the start of a work session.
@@ -466,6 +478,7 @@ main_table:
       required_columns:
         - CodeStateSection
       optional_columns:
+        - Code
         - EventInitiator
 
     - name: File.Delete
@@ -480,6 +493,7 @@ main_table:
       required_columns:
         - CodeStateSection
       optional_columns:
+        - Code
         - EventInitiator
 
     - name: File.Close
@@ -493,6 +507,7 @@ main_table:
       description: Indicates that a file was saved.
       required_columns:
         - CodeStateSection
+        - Code
       optional_columns:
         - EventInitiator
 
@@ -503,6 +518,7 @@ main_table:
         - DestinationCodeStateSection
       optional_columns:
         - EventInitiator
+        - Code
 
     - name: File.Copy
       description: Indicates that a file was copied.
@@ -511,17 +527,21 @@ main_table:
         - DestinationCodeStateSection
       optional_columns:
         - EventInitiator
+        - Code
 
     - name: File.Edit
-      description: Indicates that the contents of a file were edited.
+      description: Indicates that the contents of a file were edited. If a ParentEventID is provided, this indicates that multiple edits took place in the same action.
       required_columns:
         - CodeStateSection
         - EditType
       optional_columns:
         - EventInitiator
+        - Code
         - SourceLocation
         - InsertText
         - DeleteText
+        - DeleteLength
+        - ParentEventID
 
     - name: File.Focus
       description: Indicates that a file was selected by the user within the user interface.
@@ -529,6 +549,7 @@ main_table:
         - CodeStateSection
       optional_columns:
         - EventInitiator
+        - Code
 
     - name: Compile
       description: Indicates an attempt to compile all or part of the code.
