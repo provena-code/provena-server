@@ -148,7 +148,7 @@ main_table:
         Every event must have an ID value that is distinct from (not equal to) all other events in the main event table.
 
     - name: CodeStateID
-      requirement: Required # TODO: This will break the current setup...
+      requirement: Optional
       datatype: ID
       description: |
         Each event should contain a pointer to the current state of the student's codebase. If the code has not changed since the previous event, the previous CodeStateID may be reused. If the CodeState has changed but has not been recorded (e.g. a File.Edit event occurs, but the updated code was not logged), then CodeStateID should be left blank to indicate that it is unknown. More information about how to represent CodeStates can be found further below in the document.
@@ -254,7 +254,7 @@ main_table:
         Certain events are hierarchical, where multiple child events might be associated with a single parent event. In these cases, the parent event should be referenced in this column by its EventID value.
 
     - name: SessionID
-      requirement: EventSpecific
+      requirement: Required
       datatype: ID
       description: |
         A session is generally defined as a distinct period of time during which a student is interacting with a tool/program. Sessions are somewhat ill-defined and may vary across datasets. Session IDs must be unique across subjects and across distinct sessions. This ID may be the EventID of the SessionStart event that initiated the session, or it may be derived independently.
@@ -292,6 +292,12 @@ main_table:
       datatype: String
       description: |
         The contents of the CodeStateSection **after** the given event has occurred.
+
+    - name: CopiedText
+      requirement: EventSpecific
+      datatype: String
+      description: |
+        The text copied to the clipboard from a code editor.
 
     - name: DestinationCodeStateSection
       requirement: EventSpecific
@@ -448,7 +454,7 @@ main_table:
 
     - name: DeleteLength
       requirement: EventSpecific
-      datatype: Real
+      datatype: Integer
       description: |
         The length of the text deleted by this File.Delete event, if any. Can be used in place of DeleteText.
 
@@ -550,6 +556,16 @@ main_table:
       optional_columns:
         - EventInitiator
         - Code
+
+    - name: File.CopyText
+      description: |
+        Indicates that the user has copied the CopiedText from an open code document to the clipboard. Optionally includes the document (CodeStateSection) and file location (SourceLocation) from which the text was copied.
+        Note that for privacy reasons this even should **not** fire when a user copies text outside of the code editor, as this could contain personal information. However, if extern text is pasted into an editor, this can be indicated by setting EditType attribute to Paste.
+      required_columns:
+        - CopiedText
+      optional_columns:
+        - CodeStateSection
+        - SourceLocation
 
     - name: Compile
       description: Indicates an attempt to compile all or part of the code.

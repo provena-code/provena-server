@@ -33,8 +33,8 @@ def create_writer():
 # TODO: Should probably have a prefix
 router = APIRouter()
 
-@router.post("/events_with_code_states", operation_id="addEventsWithCodeStates", response_model=LogResult)
-def add_events_with_code_states(events: List[MainTableEvent], code_states: List[TempCodeStateEntry], writer: SQLWriter = Depends(create_writer)): # type: ignore
+@router.post("/events", operation_id="addEvents", response_model=LogResult)
+def add_events_with_code_states(events: List[MainTableEvent], writer: SQLWriter = Depends(create_writer)): # type: ignore
     """
     Add events and code states to the database at the same time to ensure consistency.
 
@@ -45,18 +45,18 @@ def add_events_with_code_states(events: List[MainTableEvent], code_states: List[
     if api_config.add_server_timestamps:
         writer.add_server_timestamps(events)
 
-    code_states = {code_state.temp_codestate_id: code_state for code_state in code_states}
-    return writer.add_events_with_codestates(events, code_states)
+    return writer.add_events(events)
 
-@router.get("/generate_api_helper", operation_id="generateAPIHelper", response_class=PlainTextResponse)
-def generate_api_helper() -> str:
-    return generate_ts_methods(spec)
+
+# @router.get("/generate_api_helper", operation_id="generateAPIHelper", response_class=PlainTextResponse)
+# def generate_api_helper() -> str:
+#     return generate_ts_methods(spec)
 
 
 # I don't think this is needed (or the whole type), but I'll keep for now
-@router.get("/placeholder")
-def get_additional_column_types(additionalColumns: AnyAdditionalColumns): # type: ignore
-    """
-    Placeholder endpoint to get the additional column types.
-    """
-    pass
+# @router.get("/placeholder")
+# def get_additional_column_types(additionalColumns: AnyAdditionalColumns): # type: ignore
+#     """
+#     Placeholder endpoint to get the additional column types.
+#     """
+#     pass

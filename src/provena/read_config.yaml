@@ -1,5 +1,7 @@
+# root_path: ./test_data/
+# sqlalchemy_url: sqlite:///test_data/edwards_f19.db
 root_path: ./test_data/
-sqlalchemy_url: sqlite:///test_data/edwards_f19.db
+sqlalchemy_url: sqlite:///test_data/example.db
 echo: true
 optimize_codestate_ids: false
 
