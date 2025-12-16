@@ -20,11 +20,11 @@ app.add_middleware(
 )
 
 for module_info in pkgutil.walk_packages(provena.api.__path__, provena.api.__name__ + "."):
-    print(f"Loading API module: {module_info.name}")
+    # print(f"Loading API module: {module_info.name}")
     module = importlib.import_module(module_info.name)
     if hasattr(module, "router"):
         app.include_router(module.router)
-        print(f"Included router from {module_info.name}")
+        # print(f"Included router from {module_info.name}")
 
 
 # TODO: Would be nice if CORS worked when there's an error

@@ -24,6 +24,7 @@ spec = ProgSnap2Spec.from_yaml(os.path.join(__src_dir, "provena/progsnap2-proven
 data_model_gen = DataModelGenerator(spec)
 MainTableEvent = data_model_gen.MainTableEvent
 AnyAdditionalColumns = data_model_gen.AnyAdditionalColumns
+SubmitEvent = data_model_gen.main_event_additional_columns.get("Submit")
 
 api_config = PS2APIConfig.from_yaml(os.path.join(__src_dir, "provena/write_config.yaml"), spec)
 read_config = PS2DataConfig.from_yaml(os.path.join(__src_dir, "provena/read_config.yaml"), spec)
