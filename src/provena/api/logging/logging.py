@@ -1,11 +1,7 @@
-from enum import Enum
-import os
-from fastapi import APIRouter, Depends, FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Literal, Type
+from fastapi import APIRouter, Depends
+from typing import List, Literal
 
-from fastapi.responses import JSONResponse, PlainTextResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from progsnap2.api.config import PS2APIConfig
@@ -17,6 +13,7 @@ from progsnap2.database.writer.db_writer_factory import IOFactory, SQLIOFactory
 from progsnap2.spec.enums import CoreTables
 from progsnap2.spec.spec_definition import PS2Versions, ProgSnap2Spec
 from progsnap2.spec.gen.gen_client import generate_ts_methods
+from progsnap2.spec.enums import MainTableColumns as Cols
 
 from provena.configs import api_config, spec, MainTableEvent
 
@@ -26,6 +23,7 @@ db_writer_factory: SQLIOFactory = IOFactory.create_factory(api_config.database_c
 with db_writer_factory.create_writer() as writer:
     # Create the tables in the database
     writer.initialize_database()
+    # writer.update_database()
 
 # For use in Depends
 def create_writer():
@@ -56,12 +54,12 @@ class CodeStateSection(BaseModel):
 
 class SubmitEvent(BaseModel):
     EventType: Literal["Submit"]
-    SubjectIDs: List[str]
+    SubjectIDs: List[str] = Field(..., min_items=1)
     AssignmentID: str
     CodeState: List[CodeStateSection]
     Score: float
-    ScoreJSON: str | None
-    ToolInstances: str | None
+    ToolInstances: str
+    ScoreDetails: str | None
     TermID: str | None
     CourseID: str | None
 
@@ -70,18 +68,54 @@ def log_submit(event: SubmitEvent, writer: SQLWriter = Depends(create_writer)): 
     """
     Submit an event to the database.
     """
-    event = event.model_dump(exclude_none=True)
+    base_event = event.model_dump(exclude_none=True)
+    codestate_sections = base_event["CodeState"]
+    subjects = base_event["SubjectIDs"]
     if api_config.add_server_timestamps:
-        writer.add_server_timestamps([event])
+        writer.add_server_timestamps([base_event])
 
-    return writer.add_events([event])
+    del base_event["CodeState"]
+    del base_event["SubjectIDs"]
+    parent_event = base_event.copy()
+    parent_event[Cols.EventID] = writer.generate_event_id()
+    subjectless_events = [parent_event]
+    if len(codestate_sections) == 1:
+        parent_event[Cols.Code] = codestate_sections[0]["Code"]
+        parent_event[Cols.CodeStateSection] = codestate_sections[0]["CodeStateSection"]
+    else:
+        for section in codestate_sections:
+            sub_event = base_event.copy()
+            sub_event[Cols.CodeStateSection] = section["CodeStateSection"]
+            sub_event[Cols.Code] = section["Code"]
+            sub_event[Cols.ParentEventID] = parent_event[Cols.EventID]
+            sub_event[Cols.Score] = None
+            sub_event[Cols.ScoreDetails] = None
+            subjectless_events.append(sub_event)
+
+    if len(subjects) == 1:
+        subjectless_events[0][Cols.SubjectID] = subjects[0]
+        events = subjectless_events
+    else:
+        events = []
+        for subject in subjects:
+            for sub_event in subjectless_events:
+                new_event = sub_event.copy()
+                new_event[Cols.SubjectID] = subject
+                events.append(new_event)
+
+    print(f"Logging {len(events)} events", events)
+    return writer.add_events(events)
 
 @router.post("/submit_and_count", operation_id="submitAndGetCount")
 def log_submit_and_get_count(event: SubmitEvent, writer: SQLWriter = Depends(create_writer)): # type: ignore
-    # TODO: FIX!!
-    # This isn't a valid event so it's not validating. Need to
-    # add colums that should exist to yaml and remove the rest before logging
-    # log_submit(event, writer)
+    try:
+        result = log_submit(event, writer)
+        if (not result.success):
+            print("Error logging event:", result.errors)
+    except Exception as e:
+        print(f"Error logging event: {e}")
+        pass
+
     count = get_event_count(event, writer)
     return count
 

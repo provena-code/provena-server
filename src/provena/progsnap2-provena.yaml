@@ -388,6 +388,12 @@ main_table:
 
         Note also that Run.Test events and potentially even Submit events could omit the Score value if they are intended exclusively as extra credit. Also, events can omit the Score value if it is not possible for a score to be calculated immediately (as is the case for creative or manually graded problems). When a manual grade is provided, an EarnedGrade Intervention should be used to log the grade.
 
+    - name: ScoreDetails
+      requirement: EventSpecific
+      datatype: String
+      description: |
+        Details about how the score was calculated, if not present in a LinkTable.
+
     - name: ExtraCreditScore
       requirement: EventSpecific
       datatype: Real
@@ -598,7 +604,10 @@ main_table:
       optional_columns:
         - ExecutionID
         - Score
+        - ScoreDetails
         - ExtraCreditScore
+        - CodeStateSection
+        - Code
 
     - name: Run.Program
       description: Indicates a program execution and its associated input and/or output.
@@ -607,6 +616,7 @@ main_table:
       optional_columns:
         - ExecutionID
         - Score
+        - ScoreDetails
         - ExtraCreditScore
         - ProgramInput
         - ProgramOutput
@@ -620,6 +630,7 @@ main_table:
         - ExecutionResult
       optional_columns:
         - Score
+        - ScoreDetails
         - ExtraCreditScore
         - ProgramInput
         - ProgramOutput
@@ -632,6 +643,7 @@ main_table:
       optional_columns:
         - ExecutionID
         - Score
+        - ScoreDetails
         - ExtraCreditScore
         - ProgramInput
         - ProgramOutput
@@ -645,6 +657,7 @@ main_table:
         - ExecutionResult
       optional_columns:
         - Score
+        - ScoreDetails
         - ExtraCreditScore
         - ProgramInput
         - ProgramOutput
