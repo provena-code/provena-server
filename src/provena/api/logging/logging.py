@@ -125,6 +125,7 @@ def get_event_count(event: SubmitEvent, writer: SQLWriter = Depends(create_write
     main_table = manager.get_table(CoreTables.MainTable)
     codestate_sections = [section.CodeStateSection for section in event.CodeState]
     # TODO: Also confirm that the code being submitted has logs
+    # TODO: Also check for renames
     statement = select(func.count()).where(
         main_table.c.SubjectID.in_(event.SubjectIDs),
         main_table.c.CodeStateSection.in_(codestate_sections)

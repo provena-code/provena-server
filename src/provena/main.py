@@ -1,6 +1,8 @@
 import importlib
 import pkgutil
 from fastapi import FastAPI, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -26,6 +28,14 @@ for module_info in pkgutil.walk_packages(provena.api.__path__, provena.api.__nam
         app.include_router(module.router)
         # print(f"Included router from {module_info.name}")
 
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    # Log the detailed error information
+    exc_str = f"Request validation error: {exc}".replace('\n', ' ').replace('  ', ' ')
+    # TODO: Actual logging!
+    print(f"Validation error: {exc_str}")
+    return await request_validation_exception_handler(request, exc)
 
 # TODO: Would be nice if CORS worked when there's an error
 # But it seems like the headers don't get added here
