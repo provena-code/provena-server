@@ -52,11 +52,13 @@ class CodeStateSection(BaseModel):
     CodeStateSection: str
     Code: str
 
-class SubmitEvent(BaseModel):
-    EventType: Literal["Submit"]
+class SubmissionInfo(BaseModel):
     SubjectIDs: List[str] = Field(..., min_items=1)
-    AssignmentID: str
     CodeState: List[CodeStateSection]
+
+class SubmitEvent(SubmissionInfo):
+    EventType: Literal["Submit"]
+    AssignmentID: str
     Score: float
     ToolInstances: str
     ScoreDetails: str | None
@@ -119,15 +121,16 @@ def log_submit_and_get_count(event: SubmitEvent, writer: SQLWriter = Depends(cre
     count = get_event_count(event, writer)
     return count
 
-def get_event_count(event: SubmitEvent, writer: SQLWriter = Depends(create_writer)): # type: ignore
+@router.post("/get_event_count", operation_id="getEventCount")
+def get_event_count(info: SubmissionInfo, writer: SQLWriter = Depends(create_writer)): # type: ignore
     manager = writer.context.table_manager
     codestates_table = manager.get_table(CoreTables.CodeStates)
     main_table = manager.get_table(CoreTables.MainTable)
-    codestate_sections = [section.CodeStateSection for section in event.CodeState]
+    codestate_sections = [section.CodeStateSection for section in info.CodeState]
     # TODO: Also confirm that the code being submitted has logs
     # TODO: Also check for renames
     statement = select(func.count()).where(
-        main_table.c.SubjectID.in_(event.SubjectIDs),
+        main_table.c.SubjectID.in_(info.SubjectIDs),
         main_table.c.CodeStateSection.in_(codestate_sections)
     )
     result = writer.conn.execute(statement).scalar()
