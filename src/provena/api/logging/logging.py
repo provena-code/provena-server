@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from typing import List, Literal
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -57,13 +57,12 @@ class SubmissionInfo(BaseModel):
     CodeState: List[CodeStateSection]
 
 class SubmitEvent(SubmissionInfo):
-    EventType: Literal["Submit"]
     AssignmentID: str
-    Score: float
     ToolInstances: str
-    ScoreDetails: str | None
-    TermID: str | None
-    CourseID: str | None
+    Score: Optional[float]
+    ScoreDetails: Optional[str]
+    TermID: Optional[str]
+    CourseID: Optional[str]
 
 @router.post("/submit", operation_id="submit", response_model=LogResult)
 def log_submit(event: SubmitEvent, writer: SQLWriter = Depends(create_writer)): # type: ignore
@@ -71,6 +70,7 @@ def log_submit(event: SubmitEvent, writer: SQLWriter = Depends(create_writer)): 
     Submit an event to the database.
     """
     base_event = event.model_dump(exclude_none=True)
+    base_event["EventType"] = "Submit"
     codestate_sections = base_event["CodeState"]
     subjects = base_event["SubjectIDs"]
     if api_config.add_server_timestamps:
