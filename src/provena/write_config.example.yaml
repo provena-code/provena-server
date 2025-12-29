@@ -3,6 +3,14 @@ database_config:
   sqlalchemy_url: sqlite:///test_data/example.db
   echo: true
   optimize_codestate_ids: true
+  indexed_columns:
+  # Useful for the instructor view
+  - AssignmentID
+  # Also useful for getting event counts on a file
+  - SubjectID
+  - CodeStateSection
+  # Useful for checking session syncing
+  - SessionID
 
   metadata:
     Version: "1.0"

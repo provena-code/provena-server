@@ -197,13 +197,13 @@ main_table:
 
         We recommend that CourseIDs be at least somewhat anonymized, to avoid making student data identifiable.
 
-    - name: CourseSectionID
-      requirement: Optional
-      datatype: ID
-      description: |
-        Courses are often split up into smaller sections of students who primarily interact with each other and a specific TA. If applicable, each section should be given a distinct ID (unique from other sections in the given course and other courses). CourseSections should not share IDs across terms.
+    # - name: CourseSectionID
+    #   requirement: Optional
+    #   datatype: ID
+    #   description: |
+    #     Courses are often split up into smaller sections of students who primarily interact with each other and a specific TA. If applicable, each section should be given a distinct ID (unique from other sections in the given course and other courses). CourseSections should not share IDs across terms.
 
-        We recommend that CourseSectionIDs be at least somewhat anonymized, to avoid making student data identifiable.
+    #     We recommend that CourseSectionIDs be at least somewhat anonymized, to avoid making student data identifiable.
 
     - name: TermID
       requirement: Optional
@@ -219,31 +219,31 @@ main_table:
 
         If the CodeState represents free-form student work not associated with a specific assignment or problem, this value should be empty. Stand-alone problems also do not need to be associated with assignments.
 
-    - name: ProblemID
-      requirement: Optional
-      datatype: ID
-      description: |
-        The identifier for the programming problem associated with the event. Each unique problem must have its own identifier that is distinct from other identifiers in the same column that correspond to different problems. If a record specifying a ProblemID also specifies an AssignmentID, it means that the problem is part of the specified assignment. There is no requirement that problems are associated with an assignment: for example, a standalone practice problem might not be considered to be part of an assignment.
+    # - name: ProblemID
+    #   requirement: Optional
+    #   datatype: ID
+    #   description: |
+    #     The identifier for the programming problem associated with the event. Each unique problem must have its own identifier that is distinct from other identifiers in the same column that correspond to different problems. If a record specifying a ProblemID also specifies an AssignmentID, it means that the problem is part of the specified assignment. There is no requirement that problems are associated with an assignment: for example, a standalone practice problem might not be considered to be part of an assignment.
 
-    - name: Attempt
-      requirement: Optional
-      datatype: Integer
-      description: |
-        If a student attempts a problem more than once, this value is used to identify which attempt they're on. It should start at 1, then increase by 1 on each following attempt.
+    # - name: Attempt
+    #   requirement: Optional
+    #   datatype: Integer
+    #   description: |
+    #     If a student attempts a problem more than once, this value is used to identify which attempt they're on. It should start at 1, then increase by 1 on each following attempt.
 
-    - name: ExperimentalCondition
-      requirement: Optional
-      datatype: String
-      description: |
-        If this data was logged as part of an experiment, this column can be used to specify the experimental condition that the event took place in. Condition names must be consistent for events in the same condition, and (if possible) distinct between different experiments. This can be accomplished by assigning each experiment in the dataset a distinct name. An example condition string is "02/18 Parsons Problem Study: Control"; this establishes the condition (control case), the study content (parsons problems), and when the study took place (February 2018).
+    # - name: ExperimentalCondition
+    #   requirement: Optional
+    #   datatype: String
+    #   description: |
+    #     If this data was logged as part of an experiment, this column can be used to specify the experimental condition that the event took place in. Condition names must be consistent for events in the same condition, and (if possible) distinct between different experiments. This can be accomplished by assigning each experiment in the dataset a distinct name. An example condition string is "02/18 Parsons Problem Study: Control"; this establishes the condition (control case), the study content (parsons problems), and when the study took place (February 2018).
 
-    - name: LoggingErrorID
-      requirement: Optional
-      datatype: ID
-      description: |
-        Logging errors are an inevitable part of the data collection process. If a data collector finds that an error occurred during the logging process, they should leave the data in its original state, but annotate all erroneous data with IDs, where each ID corresponds to a specific logging error event. Further information about the error can then be provided in a link table (which should include the ID, error type, and an explanation).
+    # - name: LoggingErrorID
+    #   requirement: Optional
+    #   datatype: ID
+    #   description: |
+    #     Logging errors are an inevitable part of the data collection process. If a data collector finds that an error occurred during the logging process, they should leave the data in its original state, but annotate all erroneous data with IDs, where each ID corresponds to a specific logging error event. Further information about the error can then be provided in a link table (which should include the ID, error type, and an explanation).
 
-        Note that logging errors can come in many forms, including corrupted/lost data, server downtime, and tool errors that result in incorrect feedback. We define a logging error to be anything that results in the log not accurately representing the true state of the world.
+    #     Note that logging errors can come in many forms, including corrupted/lost data, server downtime, and tool errors that result in incorrect feedback. We define a logging error to be anything that results in the log not accurately representing the true state of the world.
 
     # --- Event-specific Columns ---
 
@@ -267,11 +267,11 @@ main_table:
 
         Data producers should only generate Project.* events and ProjectID values if the underlying data source has an explicit concept of "project".
 
-    - name: ResourceID
-      requirement: EventSpecific
-      datatype: ID
-      description: |
-        Often students access resources while working on problems. Example resources include API documentation, online textbooks, and demo videos. In a dataset which logs student access to resources, each resource must be assigned a distinct ID. If resources are not changed across terms, their IDs should be reused.
+    # - name: ResourceID
+    #   requirement: EventSpecific
+    #   datatype: ID
+    #   description: |
+    #     Often students access resources while working on problems. Example resources include API documentation, online textbooks, and demo videos. In a dataset which logs student access to resources, each resource must be assigned a distinct ID. If resources are not changed across terms, their IDs should be reused.
 
     - name: CodeStateSection
       requirement: EventSpecific
@@ -323,23 +323,23 @@ main_table:
       description: |
         This value indicates the type of edit which caused the file to change. Specific values are described in the table below. Additional custom values should be documented in the README.md
 
-    - name: CompileResult
-      requirement: EventSpecific
-      datatype: Enum
-      description: |
-        Compile events can either result in an error, a warning, or a general success.
+    # - name: CompileResult
+    #   requirement: EventSpecific
+    #   datatype: Enum
+    #   description: |
+    #     Compile events can either result in an error, a warning, or a general success.
 
-    - name: CompileMessageType
-      requirement: EventSpecific
-      datatype: String
-      description: |
-        The type/ID of compile message provided. If no error or warning was given, the string “Success” should be used. The types of errors and warnings used will otherwise vary by language; for example, a Python compile message type might be a ‘SyntaxError' or an ‘IndentationError'.
+    # - name: CompileMessageType
+    #   requirement: EventSpecific
+    #   datatype: String
+    #   description: |
+    #     The type/ID of compile message provided. If no error or warning was given, the string “Success” should be used. The types of errors and warnings used will otherwise vary by language; for example, a Python compile message type might be a ‘SyntaxError' or an ‘IndentationError'.
 
-    - name: CompileMessageData
-      requirement: EventSpecific
-      datatype: String
-      description: |
-        The specific compiler message shown to the student.
+    # - name: CompileMessageData
+    #   requirement: EventSpecific
+    #   datatype: String
+    #   description: |
+    #     The specific compiler message shown to the student.
 
     - name: SourceLocation
       requirement: EventSpecific
@@ -347,29 +347,29 @@ main_table:
       description: |
         A SourceLocation value represents a location or region within a source file, associated with a compiler diagnostic, static analysis warning, or other message about program source. It can also describe the location of an edit in source code during File.Edit events. Note that due to the large number of ways file contents could change as a result of a File.Edit event, the SourceLocation value associated with a File.Edit event (if any) should be considered to be a “hint” regarding the location of the change(s) represented by the event. The true change corresponding to a File.Edit event is indicated by the changes to the event's CodeState relative to the previous CodeState.
 
-    - name: ExecutionID
-      requirement: EventSpecific
-      datatype: ID
-      description: |
-        This ID value is used to group Run.Test events that were part of the same overall test execution. For example, if multiple unit tests were executed, resulting in one Run.Test event for each unit test, all of the Run.Test events in the group should share a common ExecutionID value.
+    # - name: ExecutionID
+    #   requirement: EventSpecific
+    #   datatype: ID
+    #   description: |
+    #     This ID value is used to group Run.Test events that were part of the same overall test execution. For example, if multiple unit tests were executed, resulting in one Run.Test event for each unit test, all of the Run.Test events in the group should share a common ExecutionID value.
 
-        If the code execution is associated with a submission, then the Submit event should have an ExecutionID value, and the associated Run.Test, Debug.Test, and/or Run.Program events should share the same ExecutionID value.
+    #     If the code execution is associated with a submission, then the Submit event should have an ExecutionID value, and the associated Run.Test, Debug.Test, and/or Run.Program events should share the same ExecutionID value.
 
-        For consistency, this ID value may also be specified for Run.Program events.
+    #     For consistency, this ID value may also be specified for Run.Program events.
 
-    - name: TestID
-      requirement: EventSpecific
-      datatype: ID
-      description: |
-        An ID indicating which test case is associated with the event. If desired, a link table may map IDs to further information about the individual test cases. Note that TestID values may be human-readable: for example, the names of JUnit tests could be used as TestID values, but they should still be globally unique (not reused across problems).
+    # - name: TestID
+    #   requirement: EventSpecific
+    #   datatype: ID
+    #   description: |
+    #     An ID indicating which test case is associated with the event. If desired, a link table may map IDs to further information about the individual test cases. Note that TestID values may be human-readable: for example, the names of JUnit tests could be used as TestID values, but they should still be globally unique (not reused across problems).
 
-    - name: ExecutionResult
-      requirement: EventSpecific
-      datatype: Enum
-      description: |
-        Run.Program events can result in Success (the program runs fully to completion), Timeout (the program's execution is interrupted by the user or the system), or Error (the program execution is terminated by a compiler or runtime error).
+    # - name: ExecutionResult
+    #   requirement: EventSpecific
+    #   datatype: Enum
+    #   description: |
+    #     Run.Program events can result in Success (the program runs fully to completion), Timeout (the program's execution is interrupted by the user or the system), or Error (the program execution is terminated by a compiler or runtime error).
 
-        Run.Test events can result in Success (the test passes), Timeout (the test failed to complete in the allotted time), Error (the test failed due to a fatal runtime exception), or TestFailed (the test produces the incorrect output). Note that assertion errors should be classified as TestFailed, not Error.
+    #     Run.Test events can result in Success (the test passes), Timeout (the test failed to complete in the allotted time), Error (the test failed due to a fatal runtime exception), or TestFailed (the test produces the incorrect output). Note that assertion errors should be classified as TestFailed, not Error.
 
     - name: Score
       requirement: EventSpecific
@@ -394,11 +394,11 @@ main_table:
       description: |
         Details about how the score was calculated, if not present in a LinkTable.
 
-    - name: ExtraCreditScore
-      requirement: EventSpecific
-      datatype: Real
-      description: |
-        An ExtraCreditScore value ranges between 0.0 and 1.0, and indicates the degree to which a single test (in the case of Run.Test events) or submission (in the case of Submit events) satisfies extra credit criteria. This column should not contain any value for Run.Test and Submit events that have no extra credit criteria.
+    # - name: ExtraCreditScore
+    #   requirement: EventSpecific
+    #   datatype: Real
+    #   description: |
+    #     An ExtraCreditScore value ranges between 0.0 and 1.0, and indicates the degree to which a single test (in the case of Run.Test events) or submission (in the case of Submit events) satisfies extra credit criteria. This column should not contain any value for Run.Test and Submit events that have no extra credit criteria.
 
     - name: ProgramInput
       requirement: EventSpecific
@@ -426,25 +426,25 @@ main_table:
       description: |
         Programs often produce error output at the end of a run or test. The ProgramErrorOutput value specifies the URL which records the program's error channel output. The URL will typically refer to an “internal” file within the dataset's Resources directory. Note that ProgramErrorOutput is intended to capture the “error” output channel of the program, i.e., stderr in C, cerr in C++, System.err in Java, etc.
 
-    - name: InterventionCategory
-      requirement: EventSpecific
-      datatype: Enum
-      description: |
-        An Intervention event is an interaction with the subject initiated during the programming process; for example, showing the students a targeted feedback message when they fail a specific test case. We include common intervention categories here, but new ones with names starting with the prefix “X-” may be used. Common interventions should be recommended for inclusion in future versions of ProgSnap 2.
+    # - name: InterventionCategory
+    #   requirement: EventSpecific
+    #   datatype: Enum
+    #   description: |
+    #     An Intervention event is an interaction with the subject initiated during the programming process; for example, showing the students a targeted feedback message when they fail a specific test case. We include common intervention categories here, but new ones with names starting with the prefix “X-” may be used. Common interventions should be recommended for inclusion in future versions of ProgSnap 2.
 
-        Note that Compile and Run events are not interventions; these events are ubiquitous enough that they have been given their own event types.
+    #     Note that Compile and Run events are not interventions; these events are ubiquitous enough that they have been given their own event types.
 
-    - name: InterventionType
-      requirement: EventSpecific
-      datatype: String
-      description: |
-        System-level information about the type of intervention being performed. For feedback, this might be the type of error or code state that was detected; for CodeHighlight, this might be the starting and ending coordinates of the highlighted code. This can be organized freely by the logger, but the format should be consistent within datasets, and should state the information as succinctly as possible.
+    # - name: InterventionType
+    #   requirement: EventSpecific
+    #   datatype: String
+    #   description: |
+    #     System-level information about the type of intervention being performed. For feedback, this might be the type of error or code state that was detected; for CodeHighlight, this might be the starting and ending coordinates of the highlighted code. This can be organized freely by the logger, but the format should be consistent within datasets, and should state the information as succinctly as possible.
 
-    - name: InterventionMessage
-      requirement: EventSpecific
-      datatype: String
-      description: |
-        The actual intervention message shown to the student, when applicable. If no message is shown but a visual effect occurs, the effect should be described (possibly using a dataset-specific coding scheme).
+    # - name: InterventionMessage
+    #   requirement: EventSpecific
+    #   datatype: String
+    #   description: |
+    #     The actual intervention message shown to the student, when applicable. If no message is shown but a visual effect occurs, the effect should be described (possibly using a dataset-specific coding scheme).
 
     - name: InsertText
       requirement: EventSpecific
@@ -573,108 +573,108 @@ main_table:
         - CodeStateSection
         - SourceLocation
 
-    - name: Compile
-      description: Indicates an attempt to compile all or part of the code.
-      required_columns:
-        - CodeStateSection
-        - CompileResult
-      optional_columns:
-        - EventInitiator
+    # - name: Compile
+    #   description: Indicates an attempt to compile all or part of the code.
+    #   required_columns:
+    #     - CodeStateSection
+    #     - CompileResult
+    #   optional_columns:
+    #     - EventInitiator
 
-    - name: Compile.Error
-      description: Represents a compilation error and its associated diagnostic.
-      required_columns:
-        - ParentEventID
-        - CodeStateSection
-        - CompileMessageType
-        - CompileMessageData
-        - SourceLocation
+    # - name: Compile.Error
+    #   description: Represents a compilation error and its associated diagnostic.
+    #   required_columns:
+    #     - ParentEventID
+    #     - CodeStateSection
+    #     - CompileMessageType
+    #     - CompileMessageData
+    #     - SourceLocation
 
-    - name: Compile.Warning
-      description: Represents a compilation warning and its associated diagnostic.
-      required_columns:
-        - ParentEventID
-        - CodeStateSection
-        - CompileMessageType
-        - CompileMessageData
-        - SourceLocation
+    # - name: Compile.Warning
+    #   description: Represents a compilation warning and its associated diagnostic.
+    #   required_columns:
+    #     - ParentEventID
+    #     - CodeStateSection
+    #     - CompileMessageType
+    #     - CompileMessageData
+    #     - SourceLocation
 
     - name: Submit
       description: Indicates that code was submitted to the system.
       optional_columns:
-        - ExecutionID
+        # - ExecutionID
         - Score
         - ScoreDetails
-        - ExtraCreditScore
+        # - ExtraCreditScore
         - CodeStateSection
         - Code
 
-    - name: Run.Program
-      description: Indicates a program execution and its associated input and/or output.
-      required_columns:
-        - ExecutionResult
-      optional_columns:
-        - ExecutionID
-        - Score
-        - ScoreDetails
-        - ExtraCreditScore
-        - ProgramInput
-        - ProgramOutput
-        - ProgramErrorOutput
+    # - name: Run.Program
+    #   description: Indicates a program execution and its associated input and/or output.
+    #   required_columns:
+    #     - ExecutionResult
+    #   optional_columns:
+    #     - ExecutionID
+    #     - Score
+    #     - ScoreDetails
+    #     - ExtraCreditScore
+    #     - ProgramInput
+    #     - ProgramOutput
+    #     - ProgramErrorOutput
 
-    - name: Run.Test
-      description: Indicates execution of a test and its associated input and/or output.
-      required_columns:
-        - ExecutionID
-        - TestID
-        - ExecutionResult
-      optional_columns:
-        - Score
-        - ScoreDetails
-        - ExtraCreditScore
-        - ProgramInput
-        - ProgramOutput
-        - ProgramErrorOutput
+    # - name: Run.Test
+    #   description: Indicates execution of a test and its associated input and/or output.
+    #   required_columns:
+    #     - ExecutionID
+    #     - TestID
+    #     - ExecutionResult
+    #   optional_columns:
+    #     - Score
+    #     - ScoreDetails
+    #     - ExtraCreditScore
+    #     - ProgramInput
+    #     - ProgramOutput
+    #     - ProgramErrorOutput
 
-    - name: Debug.Program
-      description: Indicates a debug execution of the program and its associated input and/or output.
-      required_columns:
-        - ExecutionResult
-      optional_columns:
-        - ExecutionID
-        - Score
-        - ScoreDetails
-        - ExtraCreditScore
-        - ProgramInput
-        - ProgramOutput
-        - ProgramErrorOutput
+    # - name: Debug.Program
+    #   description: Indicates a debug execution of the program and its associated input and/or output.
+    #   required_columns:
+    #     - ExecutionResult
+    #   optional_columns:
+    #     - ExecutionID
+    #     - Score
+    #     - ScoreDetails
+    #     - ExtraCreditScore
+    #     - ProgramInput
+    #     - ProgramOutput
+    #     - ProgramErrorOutput
 
-    - name: Debug.Test
-      description: Indicates a debug execution of a test and its associated input and/or output.
-      required_columns:
-        - ExecutionID
-        - TestID
-        - ExecutionResult
-      optional_columns:
-        - Score
-        - ScoreDetails
-        - ExtraCreditScore
-        - ProgramInput
-        - ProgramOutput
-        - ProgramErrorOutput
+    # - name: Debug.Test
+    #   description: Indicates a debug execution of a test and its associated input and/or output.
+    #   required_columns:
+    #     - ExecutionID
+    #     - TestID
+    #     - ExecutionResult
+    #   optional_columns:
+    #     - Score
+    #     - ScoreDetails
+    #     - ExtraCreditScore
+    #     - ProgramInput
+    #     - ProgramOutput
+    #     - ProgramErrorOutput
 
-    - name: Resource.View
-      description: Indicates that a resource (typically a learning resource of some type) was viewed.
-      required_columns:
-        - ResourceID
+    # - name: Resource.View
+    #   description: Indicates that a resource (typically a learning resource of some type) was viewed.
+    #   required_columns:
+    #     - ResourceID
 
-    - name: Intervention
-      description: Indicates that an intervention such as a hint was done.
-      required_columns:
-        - EventInitiator
-        - InterventionCategory
-        - InterventionType
-        - InterventionMessage
+    # - name: Intervention
+    #   description: Indicates that an intervention such as a hint was done.
+    #   required_columns:
+    #     - EventInitiator
+    #     - InterventionCategory
+    #     - InterventionType
+    #     - InterventionMessage
 
 
 link_tables:
