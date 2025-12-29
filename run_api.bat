@@ -1,1 +1,1 @@
-set PYTHONPATH=./src && uvicorn --app-dir ./src provena.main:app --reload --reload-dir ./src/
+set PYTHONPATH=./src && uvicorn --app-dir ./src provena.main:app --reload --reload-dir ./src/ --port 8001

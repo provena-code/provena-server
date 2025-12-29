@@ -1,3 +1,4 @@
 .conda
 test_data/
 __pycache__
+src/provena/*config.yaml
