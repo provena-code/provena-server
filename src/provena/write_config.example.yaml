@@ -9,6 +9,7 @@ database_config:
   # Also useful for getting event counts on a file
   - SubjectID
   - CodeStateSection
+  - DestinationCodeStateSection
   # Useful for checking session syncing
   - SessionID
 
