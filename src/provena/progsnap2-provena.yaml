@@ -691,5 +691,10 @@ link_tables:
         datatype: String
         description: |
           A description of the error.
+      - name: RequestBody
+        requirement: Optional
+        datatype: String
+        description: |
+          The original content sent to the logging server.
     description: |
       A link table that records loggin error details.

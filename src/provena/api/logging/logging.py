@@ -86,19 +86,19 @@ def add_malformatted_events(events: list[dict]) -> LogResult:
             if one_result.success:
                 result.extend(one_result)
             else:
-                error = f"Could not fix malformatted event: {event}.\nResult: {one_result}"
-                one_result = add_error_event(error, writer=writer)
+                error = f"Could not fix malformatted event.\nResult: {one_result}"
+                one_result = add_error_event(error, str(event), writer=writer)
                 result.extend(one_result)
         return result
 
-def add_error_event(error: str, writer: SQLWriter | None = None) -> LogResult:
+def add_error_event(error: str, request: str, writer: SQLWriter | None = None) -> LogResult:
     if writer is None:
         with db_writer_factory.create_writer() as writer:
-            return _add_error_event(error, writer)
+            return _add_error_event(error, request, writer)
     else:
-        return _add_error_event(error, writer)
+        return _add_error_event(error, request, writer)
 
-def _add_error_event(error: str, writer: SQLWriter) -> LogResult:
+def _add_error_event(error: str, request: str, writer: SQLWriter) -> LogResult:
     error_id = writer.generate_event_id()
     data = {
         Cols.EventType: "LoggingError",
@@ -119,7 +119,8 @@ def _add_error_event(error: str, writer: SQLWriter) -> LogResult:
             'linkloggingerror',
             {
                 Cols.LoggingErrorID: error_id,
-                'Error': error
+                'Error': error,
+                'RequestBody': request
             }
         )
     except Exception as e:

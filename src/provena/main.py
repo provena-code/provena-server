@@ -57,7 +57,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             try:
                 text = await request.body()
                 text = text.decode("utf-8")
-                result = add_error_event(f"Could not parse request body: {text}")
+                result = add_error_event(f"Could not parse request body.", text)
                 result.errors.insert(0, f"Content was not valid JSON: {exc_str}")
                 return JSONResponse(
                     content=jsonable_encoder(result),
@@ -72,6 +72,16 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     print(f"Unhandled exception: {exc}")
+    try:
+        request = None
+        try:
+            request = await request.body()
+            request = request.decode("utf-8")
+        except Exception as e:
+            pass
+        await add_error_event(f"Internal server error: {exc}", request)
+    except Exception as e:
+        print(f"Error logging internal server error: {e}")
     return JSONResponse(
         status_code=500,
         content={"detail": "Internal Server Error"},
