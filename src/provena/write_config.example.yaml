@@ -1,7 +1,7 @@
 database_config:
   root_path: ./test_data/
   sqlalchemy_url: sqlite:///test_data/example.db
-  echo: true
+  echo: false
   optimize_codestate_ids: true
   indexed_columns:
   # Useful for the instructor view

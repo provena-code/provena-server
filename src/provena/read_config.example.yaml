@@ -2,6 +2,6 @@
 # sqlalchemy_url: sqlite:///test_data/edwards_f19.db
 root_path: ./test_data/
 sqlalchemy_url: sqlite:///test_data/example.db
-echo: true
+echo: false
 optimize_codestate_ids: false
 metadata_table_name: metadata
