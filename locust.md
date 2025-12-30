@@ -69,3 +69,25 @@ Expected Output: Should be a number (don't need to verify).
 At peak volume, I expect there will be up to 100 users working and logging events regularly.
 
 # Q&A
+* In the "sync existing logs" phase, what is considered a "large prior log"? How many events should be included in this initial POST to `/events`?
+  * A: 0-500
+* For the task that sends an "improperly formatted request to `/events`", what kind of malformation should I simulate? E.g., missing a required field, invalid enum value, wrong data type? The `add_malformatted_events` function in `src/provena/api/logging/logging.py` seems to handle some cases by filling in "MISSING"—should I try to trigger that?
+  * A: Yes, triggering a RequestValidationError is the goal. One option is to remove a required field. Another is to send invalid JSON (e.g. random text). Both should fail gracefully and return 200 with a LogResult that has errors.
+* The workflow says "multiple rounds of" syncing. How many rounds should a user perform at the start of a session?
+  * A: 0-20
+* The workflow states "Occasionally submit 1-5 times". Does this mean a user performs a burst of 1-5 submissions and then goes back to logging events, or is it 1-5 total submissions spread out across the entire test for that user?
+  * A: Submissions happen throughout, and usually in small bursts (e.g. 1-5 attempts), though it's ok to intersperse them with edits (this is natural).
+
+# Notes
+* **Host Configuration**: The `locust.py` script will default to `http://127.0.0.1:8001/` but will be configurable via command-line arguments.
+* **User `wait_time`**: I'll use `wait_time = between(2.0, 4.0)` to simulate the 3-second interval between event posts.
+* **Data Generation**:
+  * I will use standard libraries like `uuid`, `datetime`, `random`, and `string` for generating IDs, timestamps, and random data.
+  * Enum values for fields like `EventType` will be extracted from `openapi.json` to ensure validity.
+* **Task Distribution**: I will use Locust's task weighting to make the primary `/events` logging task far more frequent than the "occasional" tasks like `/submit` or sending malformed requests.
+* **State Management**: Each simulated user will maintain its own state, including its `session_id` and a list of generated `CodeStateSection`s and `SubjectID`s to ensure consistency across related API calls.
+
+  * Clarification: each user should just have one SubjectID; no need to simulate teams right now.
+
+* **Initial Sync**: For the initial sync, I will have the user check `/read/sessions/{session_id}/last_synced_order` with its own new `session_id`. This will likely return -1, which is a realistic scenario for a new session.
+
