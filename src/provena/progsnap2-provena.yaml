@@ -237,13 +237,13 @@ main_table:
     #   description: |
     #     If this data was logged as part of an experiment, this column can be used to specify the experimental condition that the event took place in. Condition names must be consistent for events in the same condition, and (if possible) distinct between different experiments. This can be accomplished by assigning each experiment in the dataset a distinct name. An example condition string is "02/18 Parsons Problem Study: Control"; this establishes the condition (control case), the study content (parsons problems), and when the study took place (February 2018).
 
-    # - name: LoggingErrorID
-    #   requirement: Optional
-    #   datatype: ID
-    #   description: |
-    #     Logging errors are an inevitable part of the data collection process. If a data collector finds that an error occurred during the logging process, they should leave the data in its original state, but annotate all erroneous data with IDs, where each ID corresponds to a specific logging error event. Further information about the error can then be provided in a link table (which should include the ID, error type, and an explanation).
+    - name: LoggingErrorID
+      requirement: Optional
+      datatype: ID
+      description: |
+        Logging errors are an inevitable part of the data collection process. If a data collector finds that an error occurred during the logging process, they should leave the data in its original state, but annotate all erroneous data with IDs, where each ID corresponds to a specific logging error event. Further information about the error can then be provided in a link table (which should include the ID, error type, and an explanation).
 
-    #     Note that logging errors can come in many forms, including corrupted/lost data, server downtime, and tool errors that result in incorrect feedback. We define a logging error to be anything that results in the log not accurately representing the true state of the world.
+        Note that logging errors can come in many forms, including corrupted/lost data, server downtime, and tool errors that result in incorrect feedback. We define a logging error to be anything that results in the log not accurately representing the true state of the world.
 
     # --- Event-specific Columns ---
 
@@ -676,16 +676,20 @@ main_table:
     #     - InterventionType
     #     - InterventionMessage
 
+    - name: LoggingError
+      description: Indicates that an error occurred when logging.
+      required_columns:
+        - LoggingErrorID
 
 link_tables:
-  - name: LinkSubject
+  - name: LinkLoggingError
     id_column_names:
-      - SubjectID
+      - LoggingErrorID
     additional_columns:
-      - name: MidtermExamScore
+      - name: Error
         requirement: Optional
-        datatype: Real
+        datatype: String
         description: |
-          The student's score between 0-1 on the midterm exam.
+          A description of the error.
     description: |
-      A link table with additional information about each student.
+      A link table that records loggin error details.

@@ -11,7 +11,7 @@ from progsnap2.api.events import DataModelGenerator
 from progsnap2.database.writer.db_writer import DBWriter, LogResult
 from progsnap2.database.writer.db_writer_factory import IOFactory, SQLIOFactory
 from progsnap2.spec.enums import CoreTables
-from progsnap2.spec.spec_definition import PS2Versions, ProgSnap2Spec
+from progsnap2.spec.spec_definition import PS2Versions, ProgSnap2Spec, Requirement
 from progsnap2.spec.gen.gen_client import generate_ts_methods
 from progsnap2.spec.enums import MainTableColumns as Cols
 
@@ -47,6 +47,88 @@ def add_events_with_code_states(events: List[MainTableEvent], writer: SQLWriter 
         writer.add_server_timestamps(events)
 
     return writer.add_events(events)
+
+def add_malformatted_events(events: list[dict]) -> LogResult:
+    """
+    Add a malformatted event to the database with an error message.
+    """
+    with db_writer_factory.create_writer() as writer:
+        fixed_events = []
+        if api_config.add_server_timestamps:
+            writer.add_server_timestamps(events)
+
+        for event in events:
+            if event is None or not isinstance(event, dict):
+                # If this is happening, it's too far gone to record
+                continue
+            try:
+                # Try parsing this one individually
+                # If it succeeds, we can just use that
+                data = MainTableEvent(**event).model_dump(exclude_none=True)
+                fixed_events.append(data)
+                continue
+            except Exception as e:
+                data = event
+
+            required_cols = [
+                col for col in spec.main_table.columns
+                if col.requirement == Requirement.Required
+            ]
+            # Supply missing columns in case that's the issue
+            for col in required_cols:
+                if col.name not in data:
+                    data[col.name] = "MISSING"
+            fixed_events.append(data)
+
+        result = LogResult(success=True)
+        for event in fixed_events:
+            one_result = writer.add_events([event])
+            if one_result.success:
+                result.extend(one_result)
+            else:
+                error = f"Could not fix malformatted event: {event}.\nResult: {one_result}"
+                one_result = add_error_event(error, writer=writer)
+                result.extend(one_result)
+        return result
+
+def add_error_event(error: str, writer: SQLWriter | None = None) -> LogResult:
+    if writer is None:
+        with db_writer_factory.create_writer() as writer:
+            return _add_error_event(error, writer)
+    else:
+        return _add_error_event(error, writer)
+
+def _add_error_event(error: str, writer: SQLWriter) -> LogResult:
+    error_id = writer.generate_event_id()
+    data = {
+        Cols.EventType: "LoggingError",
+        Cols.EventID: writer.generate_event_id(),
+        Cols.ToolInstances: "ProvenaServer",
+        Cols.LoggingErrorID: error_id,
+    }
+    writer.add_server_timestamps([data])
+    try:
+        result = writer.add_events([data])
+    except Exception as e:
+        error = f"Could not log error event: {error}\nException: {e}"
+        print(error)
+        result = LogResult(success=False, errors=[error])
+
+    try:
+        writer.add_link_table_entry(
+            'linkloggingerror',
+            {
+                Cols.LoggingErrorID: error_id,
+                'Error': error
+            }
+        )
+    except Exception as e:
+        error = f"Could not log error message in link table: {error}\nException: {e}"
+        print(error)
+        result.errors.append(error)
+        result.success = False
+
+    return result
 
 class CodeStateSection(BaseModel):
     CodeStateSection: str
