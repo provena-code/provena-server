@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 from fastapi import APIRouter, Depends
 from typing import List, Literal, Optional
 
@@ -111,7 +114,7 @@ def _add_error_event(error: str, request: str, writer: SQLWriter) -> LogResult:
         result = writer.add_events([data])
     except Exception as e:
         error = f"Could not log error event: {error}\nException: {e}"
-        print(error)
+        logger.error(error)
         result = LogResult(success=False, errors=[error])
 
     try:
@@ -125,7 +128,7 @@ def _add_error_event(error: str, request: str, writer: SQLWriter) -> LogResult:
         )
     except Exception as e:
         error = f"Could not log error message in link table: {error}\nException: {e}"
-        print(error)
+        logger.error(error)
         result.errors.append(error)
         result.success = False
 
@@ -190,7 +193,7 @@ def log_submit(event: SubmitEvent, writer: SQLWriter = Depends(create_writer)): 
                 new_event[Cols.SubjectID] = subject
                 events.append(new_event)
 
-    print(f"Logging {len(events)} events", events)
+    logger.info(f"Logging {len(events)} Submit events", events)
     return writer.add_events(events)
 
 @router.post("/get_event_count", operation_id="getEventCount")
@@ -220,7 +223,7 @@ def get_event_count_for_codestate(conn: Connection, main_table: Table, subject_i
         c(Cols.DestinationCodeStateSection).in_(codestate_sections)
     )
     other_sections = [row[0] for row in conn.execute(other_file_names).fetchall()]
-    # print("Other sections to check:", other_sections)
+    # logger.info("Other sections to check:", other_sections)
     other_sections_to_check = [s for s in other_sections if s not in alread_checked_codestate_sections]
 
     if len(other_sections_to_check) > 0:

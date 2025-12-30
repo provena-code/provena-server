@@ -24,7 +24,6 @@ def get_all_edits(
     result = [dict(row) for row in result]
     subject_map = {}
     for row in result:
-        # print(row)
         subject_id = row[Cols.SubjectID]
         if subject_id not in subject_map:
             # TODO: Remove

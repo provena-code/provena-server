@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 import importlib
 import pkgutil
 from fastapi import FastAPI, Request
@@ -24,11 +27,11 @@ app.add_middleware(
 )
 
 for module_info in pkgutil.walk_packages(provena.api.__path__, provena.api.__name__ + "."):
-    # print(f"Loading API module: {module_info.name}")
+    # logger.info(f"Loading API module: {module_info.name}")
     module = importlib.import_module(module_info.name)
     if hasattr(module, "router"):
         app.include_router(module.router)
-        # print(f"Included router from {module_info.name}")
+        # logger.info(f"Included router from {module_info.name}")
 
 
 @app.exception_handler(RequestValidationError)
@@ -36,7 +39,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     # Log the detailed error information
     exc_str = f"Request validation error: {exc}".replace('\n', ' ').replace('  ', ' ')
     # TODO: Actual logging!
-    print(f"Validation error: {exc_str}")
+    logger.error(f"Validation error: {exc_str}")
 
     # Get the route that would have been called
     route = request.scope.get("route")
@@ -53,7 +56,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
                         content=jsonable_encoder(result),
                     )
             except Exception as e:
-                print(f"Error reading request body: {e}")
+                logger.info(f"Error reading request body: {e}")
             try:
                 text = await request.body()
                 text = text.decode("utf-8")
@@ -63,7 +66,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
                     content=jsonable_encoder(result),
                 )
             except Exception as e:
-                print(f"Error reading request body for logging: {e}")
+                logger.info(f"Error reading request body for logging: {e}")
 
     return await request_validation_exception_handler(request, exc)
 
@@ -71,7 +74,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 # But it seems like the headers don't get added here
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    print(f"Unhandled exception: {exc}")
+    logger.error(f"Unhandled exception: {exc}")
     try:
         request = None
         try:
@@ -81,7 +84,7 @@ async def global_exception_handler(request: Request, exc: Exception):
             pass
         await add_error_event(f"Internal server error: {exc}", request)
     except Exception as e:
-        print(f"Error logging internal server error: {e}")
+        logger.error(f"Error logging internal server error: {e}")
     return JSONResponse(
         status_code=500,
         content={"detail": "Internal Server Error"},
