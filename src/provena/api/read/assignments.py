@@ -7,7 +7,7 @@ from progsnap2.spec.enums import CoreTables, EventType, MainTableColumns as Cols
 from provena.api.read.common import create_reader
 import pandas as pd
 
-from sqlalchemy import select
+from sqlalchemy import and_, func, select
 
 router = APIRouter(prefix="/read")
 
@@ -30,23 +30,59 @@ class AssignmentSubjectsResponseItem(BaseModel):
 def get_assignments(assignment_id: str, reader: SQLReader = Depends(create_reader)) -> list[AssignmentSubjectsResponseItem]:
     manager = reader.get_table_manager()
     main_table = manager.get_table(CoreTables.MainTable)
-    cols = [
+
+    # Find all the Submissions for this AssignmentID
+    # and get who submitted what
+    submitted_files = select(
+        main_table.c.SubjectID,
+        main_table.c.CodeStateSection,
+        func.max(main_table.c.ServerTimestamp).label("LastSubmissionTime")
+    ).where(and_(
+        main_table.c.AssignmentID == assignment_id,
+        main_table.c.EventType == EventType.Submit,
+        main_table.c.SubjectID.isnot(None),
+        main_table.c.CodeStateSection.isnot(None)
+    )).group_by(
+        main_table.c.SubjectID,
+        main_table.c.CodeStateSection
+    ).cte("submitted_files")
+
+
+    select_cols = [
         Cols.SubjectID,
         Cols.InsertText,
-        Cols.DeleteText,
+        # TODO: Need a different call if using DeleteText
+        Cols.DeleteLength,
     ]
-    cols = [main_table.c[col] for col in cols]
-    statement = select(*cols).where(
-        (main_table.c[Cols.AssignmentID] == assignment_id) &
-        (main_table.c[Cols.EventType] == EventType.FileEdit)
+    select_cols = [main_table.c[col] for col in select_cols]
+
+    # Final all edits made by these subjects in these code state sections
+    # before the submission
+    statement = select(*select_cols).where(
+        and_(
+            main_table.c.EventType == EventType.FileEdit,
+            main_table.c.ServerTimestamp <= submitted_files.c.LastSubmissionTime
+        )
+    ).join(
+        submitted_files,
+        and_(
+            main_table.c.SubjectID == submitted_files.c.SubjectID,
+            main_table.c.CodeStateSection == submitted_files.c.CodeStateSection
+        )
     )
-    edits = pd.read_sql_query(statement, reader.get_session())
+
+    # statement = select(*select_cols).where(
+    #     (main_table.c[Cols.AssignmentID] == assignment_id) &
+    #     (main_table.c[Cols.EventType] == EventType.FileEdit)
+    # )
+    edits = pd.read_sql_query(statement, reader.get_session().connection())
+    print(edits)
     # Get the sum of inserted and deleted text lengths per subject
     edits[Cols.InsertText + "Length"] = edits[Cols.InsertText].str.len().fillna(0)
-    edits[Cols.DeleteText + "Length"] = edits[Cols.DeleteText].str.len().fillna(0)
+    edits["DeleteTextLength"] = edits[Cols.DeleteLength]
     summary = edits.groupby(Cols.SubjectID).agg({
         Cols.InsertText + "Length": "sum",
-        Cols.DeleteText + "Length": "sum"
+        "DeleteTextLength": "sum"
     }).reset_index()
     as_dict = summary.to_dict(orient="records")
     return [AssignmentSubjectsResponseItem(**item) for item in as_dict]

@@ -189,11 +189,12 @@ def log_submit(event: SubmitEvent, writer: SQLWriter = Depends(create_writer)): 
             sub_event[Cols.Code] = section["Code"]
             sub_event[Cols.ParentEventID] = parent_event[Cols.EventID]
             sub_event[Cols.Score] = None
-            sub_event[Cols.ScoreDetails] = None
+            sub_event["ScoreDetails"] = None
             subjectless_events.append(sub_event)
 
     if len(subjects) == 1:
-        subjectless_events[0][Cols.SubjectID] = subjects[0]
+        for e in subjectless_events:
+            e[Cols.SubjectID] = subjects[0]
         events = subjectless_events
     else:
         events = []

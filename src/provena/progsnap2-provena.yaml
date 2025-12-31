@@ -608,6 +608,7 @@ main_table:
         # - ExtraCreditScore
         - CodeStateSection
         - Code
+        - ParentEventID
 
     # - name: Run.Program
     #   description: Indicates a program execution and its associated input and/or output.

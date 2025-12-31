@@ -43,7 +43,7 @@ def get_student_edits(
     main_table = manager.get_table(CoreTables.MainTable)
     result = _get_edits(
         (main_table.c[Cols.SubjectID] == subject_id) &
-        (main_table.c[Cols.AssignmentID] == assignment_id) &
+        # (main_table.c[Cols.AssignmentID] == assignment_id) &
         (main_table.c[Cols.CodeStateSection] == codestate_section),
         reader
     )
@@ -54,15 +54,21 @@ def get_student_edits(
 def _get_edits_query(filter: any, reader: SQLReader):
     manager = reader.get_table_manager()
     main_table = manager.get_table(CoreTables.MainTable)
-    cols = [
-        Cols.SubjectID, Cols.EventID, Cols.ClientTimestamp,
-        Cols.SourceLocation,
-        "InsertText", "DeleteText",
-    ]
-    cols = [main_table.c[col] for col in cols]
-    statement = select(*cols).where(
-        (main_table.c[Cols.EventType] == EventType.FileEdit) &
+    # cols = [
+    #     Cols.SubjectID, Cols.EventID, Cols.ClientTimestamp,
+    #     Cols.SourceLocation,
+    #     "InsertText", "DeleteText", "DeleteLength"
+    # ]
+    # cols = [main_table.c[col] for col in cols]
+    # statement = select(*cols).where(
+    statement = select(main_table).where(
+        # (main_table.c[Cols.EventType] == EventType.FileEdit) &
+        # Just use client events for now...
+        (main_table.c[Cols.ClientTimestamp] != None) &
         filter
+    ).order_by(
+        main_table.c[Cols.ClientTimestamp].asc(),
+        main_table.c[Cols.Order].asc()
     )
     return statement
 
