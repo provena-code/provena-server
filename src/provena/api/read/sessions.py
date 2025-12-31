@@ -24,5 +24,5 @@ def get_last_synced_log_index(session_id: str, reader: SQLReader = Depends(creat
     statement = select(func.max(main_table.c[Cols.Order])).where(
         (main_table.c[Cols.SessionID] == session_id)
     )
-    result = reader.get_conn().execute(statement).scalar_one()
+    result = reader.get_session().execute(statement).scalar_one()
     return result if result is not None else -1

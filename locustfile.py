@@ -59,7 +59,7 @@ def generate_main_table_event(session_id: str, order: int, subject_id: str, code
         event["EditType"] = random.choice(EDIT_TYPES)
         event["InsertText"] = random_string(20)
         event["DeleteText"] = random_string(10)
-    
+
     # Add 'Code' field for ~1 in 20 events
     if random.random() < 0.05: # 1 in 20
         event["Code"] = random_string(random.randint(1, 1000))
@@ -73,7 +73,7 @@ def generate_main_table_event(session_id: str, order: int, subject_id: str, code
 class WebsiteUser(HttpUser):
     wait_time = between(2.0, 4.0)
     host = "http://127.0.0.1:8001"
-    
+
     def on_start(self):
         """Called when a simulated user starts. Simulates the initial log sync."""
         self.session_id = str(uuid.uuid4())
@@ -98,7 +98,7 @@ class WebsiteUser(HttpUser):
                     event = generate_main_table_event(self.session_id, self.order, subject_id, code_state_section)
                     events_to_send.append(event)
                     self.order += 1
-                
+
                 self.client.post("/events", json=events_to_send)
 
     @task(20)
@@ -112,7 +112,7 @@ class WebsiteUser(HttpUser):
             event = generate_main_table_event(self.session_id, self.order, subject_id, code_state_section)
             events_to_send.append(event)
             self.order += 1
-        
+
         self.client.post("/events", json=events_to_send)
 
     @task(1)
@@ -123,7 +123,7 @@ class WebsiteUser(HttpUser):
             num_sections = random.randint(1, 4)
             # Use real CodeStateSection values from the user's history
             sections_to_use = random.sample(self.known_code_state_sections, k=min(num_sections, len(self.known_code_state_sections)))
-            
+
             code_state = []
             for section in sections_to_use:
                 code_state.append({
@@ -156,7 +156,7 @@ class WebsiteUser(HttpUser):
         """Sends a deliberately malformed event to test error handling."""
         # Malformed requests should aim to trigger RequestValidationError
         # and should return 200 with LogResult indicating errors.
-        
+
         malform_type = random.choice(["missing_field", "invalid_json"])
 
         if malform_type == "missing_field":
@@ -164,10 +164,10 @@ class WebsiteUser(HttpUser):
             code_state_section = random.choice(self.known_code_state_sections)
             event = generate_main_table_event(self.session_id, self.order, subject_id, code_state_section)
             self.order += 1
-            
+
             # Remove a required field
             del event["EventType"]
-            
+
             self.client.post("/events", json=[event], name="/events [malformed-missing-field]")
         elif malform_type == "invalid_json":
             # Send entirely invalid JSON

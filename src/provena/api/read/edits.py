@@ -68,5 +68,5 @@ def _get_edits_query(filter: any, reader: SQLReader):
 
 def _get_edits(filter: any, reader: SQLReader):
     statement = _get_edits_query(filter, reader)
-    results = reader.get_conn().execute(statement).mappings().all()
+    results = reader.get_session().execute(statement).mappings().all()
     return results

@@ -5,7 +5,8 @@ from fastapi import APIRouter, Depends
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
-from sqlalchemy import Column, Connection, Table, func, select
+from sqlalchemy import Column, Table, func, select
+from sqlalchemy.orm import Session
 
 from progsnap2.api.config import PS2APIConfig
 from progsnap2.api.models import TempCodeStateEntry
@@ -201,16 +202,16 @@ def get_event_count(info: SubmissionInfo, writer: SQLWriter = Depends(create_wri
     manager = writer.context.table_manager
     main_table = manager.get_table(CoreTables.MainTable)
     codestate_sections = [cs.CodeStateSection for cs in info.CodeState]
-    result = get_event_count_for_codestate(writer.conn, main_table, info.SubjectIDs, codestate_sections)
+    result = get_event_count_for_codestate(writer.session, main_table, info.SubjectIDs, codestate_sections)
     return result
 
-def get_event_count_for_codestate(conn: Connection, main_table: Table, subject_ids: List[str], codestate_sections: List[str], alread_checked_codestate_sections: set[str] = set()) -> int:
+def get_event_count_for_codestate(session: Session, main_table: Table, subject_ids: List[str], codestate_sections: List[str], alread_checked_codestate_sections: set[str] = set()) -> int:
     # TODO: Also confirm that the code being submitted has logs
     statement = select(func.count()).where(
         main_table.c.SubjectID.in_(subject_ids),
         main_table.c.CodeStateSection.in_(codestate_sections)
     )
-    result = conn.execute(statement).scalar()
+    result = session.execute(statement).scalar()
 
     def c(col: str) -> Column:
         return main_table.c[col]
@@ -222,12 +223,12 @@ def get_event_count_for_codestate(conn: Connection, main_table: Table, subject_i
         c(Cols.SubjectID).in_(subject_ids),
         c(Cols.DestinationCodeStateSection).in_(codestate_sections)
     )
-    other_sections = [row[0] for row in conn.execute(other_file_names).fetchall()]
+    other_sections = [row[0] for row in session.execute(other_file_names).fetchall()]
     # logger.info("Other sections to check:", other_sections)
     other_sections_to_check = [s for s in other_sections if s not in alread_checked_codestate_sections]
 
     if len(other_sections_to_check) > 0:
-        result += get_event_count_for_codestate(conn, main_table, subject_ids, other_sections_to_check, alread_checked_codestate_sections)
+        result += get_event_count_for_codestate(session, main_table, subject_ids, other_sections_to_check, alread_checked_codestate_sections)
 
     return result
 

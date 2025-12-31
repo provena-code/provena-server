@@ -17,7 +17,7 @@ def get_assignments(reader: SQLReader = Depends(create_reader)):
     # TODO: It would be great to have an Assignments table
     main_table = manager.get_table(CoreTables.MainTable)
     statement = select(main_table.c[Cols.AssignmentID].distinct())
-    results = reader.get_conn().execute(statement).fetchall()
+    results = reader.get_session().execute(statement).fetchall()
     ids = [row[0] for row in results]
     return ids
 
@@ -40,7 +40,7 @@ def get_assignments(assignment_id: str, reader: SQLReader = Depends(create_reade
         (main_table.c[Cols.AssignmentID] == assignment_id) &
         (main_table.c[Cols.EventType] == EventType.FileEdit)
     )
-    edits = pd.read_sql_query(statement, reader.get_conn())
+    edits = pd.read_sql_query(statement, reader.get_session())
     # Get the sum of inserted and deleted text lengths per subject
     edits[Cols.InsertText + "Length"] = edits[Cols.InsertText].str.len().fillna(0)
     edits[Cols.DeleteText + "Length"] = edits[Cols.DeleteText].str.len().fillna(0)
@@ -63,6 +63,6 @@ def get_assignments(
         (main_table.c[Cols.AssignmentID] == assignment_id) &
         (main_table.c[Cols.SubjectID] == subject_id)
     )
-    results = reader.get_conn().execute(statement).fetchall()
+    results = reader.get_session().execute(statement).fetchall()
     ids = [row[0] for row in results]
     return ids
