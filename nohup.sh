@@ -1,0 +1,1 @@
+nohup ./run_api_prod.sh > app.out 2>&1 & echo $! > uvicorn.pid

@@ -3,3 +3,6 @@ test_data/
 __pycache__
 src/provena/*config.yaml
 openapi.json
+app.out
+uvicorn.pid
+venv
