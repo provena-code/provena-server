@@ -46,7 +46,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     # Get the route that would have been called
     route = request.scope.get("route")
     if route:
-        path = request.url.path
+        path = route.path if route else request.url.path
         if path == "/events":
             # Get the body of the request
             try:
