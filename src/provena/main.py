@@ -1,4 +1,6 @@
 import logging
+
+from MySQLdb import OperationalError
 logger = logging.getLogger(__name__)
 
 import importlib
@@ -69,6 +71,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
                 logger.info(f"Error reading request body for logging: {e}")
 
     return await request_validation_exception_handler(request, exc)
+
+@app.exception_handler(OperationalError)
+async def db_handler(request: Request, exc: OperationalError):
+    logger.error(f"Database operational error: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Database Operational Error"},
+    )
 
 # TODO: Would be nice if CORS worked when there's an error
 # But it seems like the headers don't get added here

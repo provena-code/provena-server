@@ -23,10 +23,19 @@ from provena.configs import api_config, spec, MainTableEvent
 
 db_writer_factory: SQLIOFactory = IOFactory.create_factory(api_config.database_config, ps2_spec=spec)
 
+# Useful for testing performance without DB
+# from sqlalchemy import event
+# @event.listens_for(db_writer_factory.engine, "before_cursor_execute")
+# def noop_execute(conn, cursor, statement, params, context, executemany):
+#     raise RuntimeError("DB disabled")
+
 # TODO: Don't actually do this automatically every time...
 with db_writer_factory.create_writer() as writer:
     # Create the tables in the database
-    writer.initialize_database()
+    try:
+        writer.initialize_database()
+    except Exception as e:
+        logger.error(f"Error initializing database: {e}")
     # writer.update_database()
 
 # For use in Depends
