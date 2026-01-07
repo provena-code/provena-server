@@ -45,6 +45,11 @@ def create_writer():
 
 
 # TODO: Should probably have a prefix
+# No authentication yet, since it's just event counts and
+# adding data.
+# Eventually logging events will require a user-level token, and
+# submit/event_count will require an instructor-level token,
+# hardcoded into gradescope.
 router = APIRouter()
 
 @router.post("/events", operation_id="addEvents", response_model=LogResult)

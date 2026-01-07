@@ -11,7 +11,9 @@ from progsnap2.spec.enums import CoreTables
 from progsnap2.spec.enums import MainTableColumns as Cols
 from provena.api.read.common import create_reader
 
-
+# No access restrictions for now!
+# Not really a threat to security, since session IDs are random UUIDs
+# and don't reveal anything important to the student.
 router = APIRouter(prefix="/read")
 
 @router.get("/sessions/{session_id}/last_synced_order", operation_id="getLastSyncedOrder")

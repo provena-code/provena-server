@@ -4,12 +4,15 @@ from fastapi.params import Depends
 from pydantic import BaseModel
 from progsnap2.database.reader.sql_reader import SQLReader
 from progsnap2.spec.enums import CoreTables, EventType, MainTableColumns as Cols
-from provena.api.read.common import create_reader
+from provena.api.read.common import create_reader, require_api_key
 import pandas as pd
 
 from sqlalchemy import and_, func, select
 
-router = APIRouter(prefix="/read")
+router = APIRouter(
+    prefix="/read",
+    dependencies=[Depends(require_api_key)],
+)
 
 @router.get("/assignments")
 def get_assignments(reader: SQLReader = Depends(create_reader)):
@@ -18,7 +21,7 @@ def get_assignments(reader: SQLReader = Depends(create_reader)):
     main_table = manager.get_table(CoreTables.MainTable)
     statement = select(main_table.c[Cols.AssignmentID].distinct())
     results = reader.get_session().execute(statement).fetchall()
-    ids = [row[0] for row in results]
+    ids = [row[0] for row in results if row[0] is not None]
     return ids
 
 class AssignmentSubjectsResponseItem(BaseModel):

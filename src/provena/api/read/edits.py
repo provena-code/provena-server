@@ -2,12 +2,15 @@ from fastapi import  APIRouter, Depends
 from progsnap2.database.reader.sql_reader import SQLReader
 from progsnap2.spec.enums import CoreTables, MainTableColumns as Cols, EventType
 
-from provena.api.read.common import create_reader
+from provena.api.read.common import create_reader, require_api_key
 from provena.bridge.node_bridge import process_edits
 
 from sqlalchemy import select
 
-router = APIRouter(prefix="/read")
+router = APIRouter(
+    prefix="/read",
+    dependencies=[Depends(require_api_key)],
+)
 
 @router.get("/{assignment_id}/edits")
 def get_all_edits(
