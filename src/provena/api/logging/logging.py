@@ -223,6 +223,8 @@ def log_submit(event: SubmitEvent, writer: SQLWriter = Depends(create_writer)): 
     logger.info(f"Logging {len(events)} Submit events", events)
     return writer.add_events(events)
 
+# TODO: This should be a get, but I'll update later to no break
+# things, since it doesn't really matter...
 @router.post("/get_event_count", operation_id="getEventCount")
 def get_event_count(info: SubmissionInfo, writer: SQLWriter = Depends(create_writer)): # type: ignore
     manager = writer.context.table_manager

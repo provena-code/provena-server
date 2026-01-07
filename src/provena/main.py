@@ -70,7 +70,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             except Exception as e:
                 logger.info(f"Error reading request body for logging: {e}")
 
-    return await request_validation_exception_handler(request, exc)
+    return request_validation_exception_handler(request, exc)
 
 @app.exception_handler(OperationalError)
 async def db_handler(request: Request, exc: OperationalError):
