@@ -59,7 +59,23 @@ def add_events_with_code_states(events: List[MainTableEvent], writer: SQLWriter 
     if api_config.add_server_timestamps:
         writer.add_server_timestamps(events)
 
-    return writer.add_events(events)
+    result = writer.add_events(events)
+    if result.success:
+        return result
+
+    try:
+        logger.error(f"Error inserting events; adding as malformed. Result:\n{result}")
+        # Try to record them as an error
+        malformed_result = add_malformatted_events(events)
+        result.extend(malformed_result)
+        result.warnings.append("Original events were malformatted; attempted to correct.")
+        # Set success based on whether malformatted logging succeeded
+        result.success = malformed_result.success
+        return result
+    except Exception:
+        # Return the original failed result
+        logger.error(f"Also failed to log malformatted events.")
+        return result
 
 def add_malformatted_events(events: list[dict]) -> LogResult:
     """
