@@ -13,6 +13,8 @@ database_config:
   - DestinationCodeStateSection
   # Useful for checking session syncing
   - SessionID
+  # Used for subission checking (hash of code)
+  - CodeStateID
 
   metadata:
     Version: "1.0"

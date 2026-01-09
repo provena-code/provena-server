@@ -4,6 +4,9 @@ logger = logging.getLogger(__name__)
 from fastapi import APIRouter, Depends
 from typing import List, Literal, Optional
 
+import unicodedata
+import hashlib
+
 from pydantic import BaseModel, Field
 from sqlalchemy import Column, Table, func, select
 from sqlalchemy.orm import Session
@@ -52,6 +55,27 @@ def create_writer():
 # hardcoded into gradescope.
 router = APIRouter()
 
+
+def get_canonical_string(raw_string):
+    # Strip BOM
+    if raw_string.startswith('\ufeff'):
+        raw_string = raw_string[1:]
+
+    # Normalize Newlines & Unicode
+    normalized = raw_string.replace('\r\n', '\n')
+    normalized = unicodedata.normalize('NFC', normalized)
+
+    return normalized
+
+def generate_code_hash(code: str, canonicalize: bool = True) -> str:
+    if canonicalize:
+        code = get_canonical_string(code)
+    # Only strip in the hash, since whitespace is meaningful
+    normalized = code.strip()
+    # MD5 should be sufficient for code hashing
+    return hashlib.md5(normalized.encode('utf-8')).hexdigest()
+
+
 @router.post("/events", operation_id="addEvents", response_model=LogResult)
 def add_events_with_code_states(events: List[MainTableEvent], writer: SQLWriter = Depends(create_writer)): # type: ignore
     """
@@ -63,6 +87,14 @@ def add_events_with_code_states(events: List[MainTableEvent], writer: SQLWriter 
     events = [event.model_dump(exclude_none=True) for event in events]
     if api_config.add_server_timestamps:
         writer.add_server_timestamps(events)
+
+    for event in events:
+        print(Cols.Code in event, event.keys())
+        if Cols.Code in event:
+            code  = get_canonical_string(event[Cols.Code])
+            event[Cols.Code] = code
+            event[Cols.CodeStateID] = generate_code_hash(code, False)
+            print(f"Generated CodeStateID: {event[Cols.CodeStateID]} for code section.")
 
     result = writer.add_events(events)
     if result.success:
