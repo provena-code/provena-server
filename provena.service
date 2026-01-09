@@ -2,6 +2,7 @@
 # Create a user and group named 'provena' on your system.
 # Give it ownership of the ProvenaServer directory.
 # Give any parent directorys -x permissions for traversal.
+# Update the WorkingDirectory and ExecStart paths as needed.
 # Then run (from this directory):
 # sudo cp provena.service /etc/systemd/system/provena.service
 # sudo systemctl daemon-reload
