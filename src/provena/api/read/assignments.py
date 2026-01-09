@@ -39,6 +39,7 @@ def get_assignments(assignment_id: str, reader: SQLReader = Depends(create_reade
     submitted_files = select(
         main_table.c.SubjectID,
         main_table.c.CodeStateSection,
+        main_table.c.CodeStateID,
         func.max(main_table.c.ServerTimestamp).label("LastSubmissionTime")
     ).where(and_(
         main_table.c.AssignmentID == assignment_id,
@@ -50,6 +51,8 @@ def get_assignments(assignment_id: str, reader: SQLReader = Depends(create_reade
         main_table.c.CodeStateSection
     ).cte("submitted_files")
 
+    # TODO: Need to identify CodeStateSections for a given CodeStateID
+    # since the CodeStateSection itself is unreliable here (not a full path!)
 
     select_cols = [
         Cols.SubjectID,

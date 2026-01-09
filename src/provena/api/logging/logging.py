@@ -8,7 +8,7 @@ import unicodedata
 import hashlib
 
 from pydantic import BaseModel, Field
-from sqlalchemy import Column, Table, func, select
+from sqlalchemy import Column, Table, func, or_, select
 from sqlalchemy.orm import Session
 
 from progsnap2.api.config import PS2APIConfig
@@ -20,7 +20,7 @@ from progsnap2.database.writer.db_writer_factory import IOFactory, SQLIOFactory
 from progsnap2.spec.enums import CoreTables
 from progsnap2.spec.spec_definition import PS2Versions, ProgSnap2Spec, Requirement
 from progsnap2.spec.gen.gen_client import generate_ts_methods
-from progsnap2.spec.enums import MainTableColumns as Cols
+from progsnap2.spec.enums import MainTableColumns as Cols, EventType
 
 from provena.configs import api_config, spec, MainTableEvent
 
@@ -75,6 +75,12 @@ def generate_code_hash(code: str, canonicalize: bool = True) -> str:
     # MD5 should be sufficient for code hashing
     return hashlib.md5(normalized.encode('utf-8')).hexdigest()
 
+def add_codestate_ids(events: List[dict]) -> None:
+    for event in events:
+        if Cols.Code in event:
+            code  = get_canonical_string(event[Cols.Code])
+            event[Cols.Code] = code
+            event[Cols.CodeStateID] = generate_code_hash(code, False)
 
 @router.post("/events", operation_id="addEvents", response_model=LogResult)
 def add_events_with_code_states(events: List[MainTableEvent], writer: SQLWriter = Depends(create_writer)): # type: ignore
@@ -88,13 +94,7 @@ def add_events_with_code_states(events: List[MainTableEvent], writer: SQLWriter 
     if api_config.add_server_timestamps:
         writer.add_server_timestamps(events)
 
-    for event in events:
-        print(Cols.Code in event, event.keys())
-        if Cols.Code in event:
-            code  = get_canonical_string(event[Cols.Code])
-            event[Cols.Code] = code
-            event[Cols.CodeStateID] = generate_code_hash(code, False)
-            print(f"Generated CodeStateID: {event[Cols.CodeStateID]} for code section.")
+    add_codestate_ids(events)
 
     result = writer.add_events(events)
     if result.success:
@@ -198,9 +198,9 @@ def _add_error_event(error: str, request: str, writer: SQLWriter) -> LogResult:
     return result
 
 class CodeStateSection(BaseModel):
+    # TODO: We need to document that this CSE isn't equivalent to the
+    # one from vscode (often no path).
     CodeStateSection: str
-    # TODO: The code should probably be optional, since we
-    # don't need it for just event checks
     Code: str
 
 class SubmissionInfo(BaseModel):
@@ -258,6 +258,10 @@ def log_submit(event: SubmitEvent, writer: SQLWriter = Depends(create_writer)): 
                 events.append(new_event)
 
     logger.info(f"Logging {len(events)} Submit events", events)
+
+    # Add IDs after generating events, since there are multiple
+    # possible code files here...
+    add_codestate_ids(events)
     return writer.add_events(events)
 
 # TODO: This should be a get, but I'll update later to no break
@@ -266,20 +270,62 @@ def log_submit(event: SubmitEvent, writer: SQLWriter = Depends(create_writer)): 
 def get_event_count(info: SubmissionInfo, writer: SQLWriter = Depends(create_writer)): # type: ignore
     manager = writer.context.table_manager
     main_table = manager.get_table(CoreTables.MainTable)
-    codestate_sections = [cs.CodeStateSection for cs in info.CodeState]
-    result = get_event_count_for_codestate(writer.session, main_table, info.SubjectIDs, codestate_sections)
+    codestate_sections = get_codestate_sections_for_codestates(
+        writer.session, main_table, info.SubjectIDs, info.CodeState
+    )
+    result = get_event_count_for_codestates(writer.session, main_table, info.SubjectIDs, codestate_sections)
     return result
 
-def get_event_count_for_codestate(session: Session, main_table: Table, subject_ids: List[str], codestate_sections: List[str], alread_checked_codestate_sections: set[str] = set()) -> int:
-    # TODO: Also confirm that the code being submitted has logs
-    statement = select(func.count()).where(
-        main_table.c.SubjectID.in_(subject_ids),
-        main_table.c.CodeStateSection.in_(codestate_sections)
+def get_codestate_sections_for_codestates(session: Session, main_table: Table, subject_ids: List[str], codestate_sections: List[CodeStateSection]) -> set[str]:
+    def c(col: str) -> Column:
+        return main_table.c[col]
+
+    codestate_ids = [generate_code_hash(cs.Code) for cs in codestate_sections]
+
+    # We prefer efficiency over perfect accuracy here, so we
+    # just check the hash and not the code itself.
+    statement = select(c(Cols.CodeStateSection).distinct()).where(
+        c(Cols.EventType) != EventType.Submit,
+        c(Cols.SubjectID).in_(subject_ids),
+        c(Cols.CodeStateID).in_(codestate_ids)
     )
-    result = session.execute(statement).scalar()
+    rows = session.execute(statement).fetchall()
+    found_sections = {row[0] for row in rows if row[0] is not None}
+
+    if (len(found_sections) == 0):
+        # If this doesn't work, try matching by section name only
+        # and returning all files that end with this one.
+        for cs in codestate_sections:
+            statement = select(c(Cols.CodeStateSection).distinct()).where(
+                c(Cols.SubjectID).in_(subject_ids),
+                c(Cols.EventType) != EventType.Submit,
+                or_(
+                    c(Cols.CodeStateSection) == cs.CodeStateSection,
+                    # This ensures that the paths match exactly or it was
+                    # a subpath, just just 2 files with the same ending name.
+                    # VSCode always uses / for paths
+                    c(Cols.CodeStateSection).endswith('/' + cs.CodeStateSection)
+                )
+            )
+            rows = session.execute(statement).fetchall()
+            for row in rows:
+                found_sections.add(row[0])
+                logger.warning(f"Matched codestate section {cs.CodeStateSection} by suffix to {row[0]}\nCould not find codestate by hash: {generate_code_hash(cs.Code)}.")
+
+    return found_sections
+
+def get_event_count_for_codestates(session: Session, main_table: Table, subject_ids: List[str], codestate_sections: List[str], alread_checked_codestate_sections: set[str] = set()) -> int:
 
     def c(col: str) -> Column:
         return main_table.c[col]
+
+    # TODO: Also confirm that the code being submitted has logs
+    statement = select(func.count()).where(
+        main_table.c.SubjectID.in_(subject_ids),
+        main_table.c.EventType != EventType.Submit,
+        main_table.c.CodeStateSection.in_(codestate_sections)
+    )
+    result = session.execute(statement).scalar()
 
     alread_checked_codestate_sections.update(codestate_sections)
 
@@ -293,7 +339,7 @@ def get_event_count_for_codestate(session: Session, main_table: Table, subject_i
     other_sections_to_check = [s for s in other_sections if s not in alread_checked_codestate_sections]
 
     if len(other_sections_to_check) > 0:
-        result += get_event_count_for_codestate(session, main_table, subject_ids, other_sections_to_check, alread_checked_codestate_sections)
+        result += get_event_count_for_codestates(session, main_table, subject_ids, other_sections_to_check, alread_checked_codestate_sections)
 
     return result
 
