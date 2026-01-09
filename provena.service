@@ -1,0 +1,29 @@
+# Instructions:
+# Create a user and group named 'provena' on your system.
+# Give it ownership of the ProvenaServer directory.
+# Give any parent directorys -x permissions for traversal.
+# Then run (from this directory):
+# sudo cp provena.service /etc/systemd/system/provena.service
+# sudo systemctl daemon-reload
+# sudo systemctl enable provena.service
+# sudo systemctl start provena.service
+# Check status with:
+# sudo systemctl status provena.service
+
+[Unit]
+Description=Provena
+After=network.target
+
+[Service]
+# User that will run the command
+User=provena
+# The directory where the command should run
+WorkingDirectory=/opt/flask/ProvenaServer
+# The exact command to execute
+ExecStart=/opt/flask/ProvenaServer/run_api_prod.sh
+# Restart the service if it crashes
+Restart=always
+
+[Install]
+# This ensures the service starts on boot
+WantedBy=multi-user.target
