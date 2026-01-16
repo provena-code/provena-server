@@ -187,7 +187,8 @@ def _add_error_event(error: str, request: str, writer: SQLWriter) -> LogResult:
                 Cols.LoggingErrorID: error_id,
                 'Error': error,
                 'RequestBody': request
-            }
+            },
+            truncate=True
         )
     except Exception as e:
         error = f"Could not log error message in link table: {error}\nException: {e}"

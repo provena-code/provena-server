@@ -165,7 +165,7 @@ main_table:
 
     - name: ToolInstances
       requirement: Required
-      datatype: String
+      datatype: ID
       description: |
         A semicolon-separated list of tool instance identifiers active at the time of the event.
 
