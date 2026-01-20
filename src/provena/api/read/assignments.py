@@ -14,7 +14,7 @@ router = APIRouter(
     dependencies=[Depends(require_api_key)],
 )
 
-@router.get("/assignments")
+@router.get("/assignments", operation_id="getAssignmentIDs")
 def get_assignments(reader: SQLReader = Depends(create_reader)):
     manager = reader.get_table_manager()
     # TODO: It would be great to have an Assignments table
@@ -29,8 +29,8 @@ class AssignmentSubjectsResponseItem(BaseModel):
     InsertTextLength: int
     DeleteTextLength: int
 
-@router.get("/assignments/{assignment_id}/subjects")
-def get_assignments(assignment_id: str, reader: SQLReader = Depends(create_reader)) -> list[AssignmentSubjectsResponseItem]:
+@router.get("/assignments/{assignment_id}/subjects", operation_id="getSubjectStatsForAssignment")
+def get_subject_stats_for_assignment(assignment_id: str, reader: SQLReader = Depends(create_reader)) -> list[AssignmentSubjectsResponseItem]:
     manager = reader.get_table_manager()
     main_table = manager.get_table(CoreTables.MainTable)
 
@@ -93,8 +93,8 @@ def get_assignments(assignment_id: str, reader: SQLReader = Depends(create_reade
     as_dict = summary.to_dict(orient="records")
     return [AssignmentSubjectsResponseItem(**item) for item in as_dict]
 
-@router.get("/assignments/{assignment_id}/{subject_id}/code_state_sections")
-def get_assignments(
+@router.get("/assignments/{assignment_id}/{subject_id}/code_state_sections", operation_id="getCodeStateSectionsForAssignmentSubject")
+def get_code_state_sections_for_assignment_subject(
     assignment_id: str,
     subject_id: str,
     reader: SQLReader = Depends(create_reader)

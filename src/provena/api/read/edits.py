@@ -1,4 +1,5 @@
-from fastapi import  APIRouter, Depends
+from typing import Annotated
+from fastapi import  APIRouter, Depends, Query
 from progsnap2.database.reader.sql_reader import SQLReader
 from progsnap2.spec.enums import CoreTables, MainTableColumns as Cols, EventType
 
@@ -37,9 +38,10 @@ def get_all_edits(
     edits = process_edits(subject_map)
     return edits
 
-@router.get("/{subject_id}/{assignment_id}/{codestate_section}/edits")
+@router.get("/edits", operation_id="getFileEdits")
 def get_student_edits(
-    subject_id: str, assignment_id: str, codestate_section: str,
+    subject_id: Annotated[str, Query(description="SubjectID")],
+    codestate_section: Annotated[str, Query(description="CodestateSection")],
     reader: SQLReader = Depends(create_reader)
 ):
     manager = reader.get_table_manager()
