@@ -56,6 +56,7 @@ def get_student_edits(
     result = [dict(row) for row in result]
     return result
 
+# TODO: This should also work with renames!
 def _get_edits_query(filter: any, reader: SQLReader):
     manager = reader.get_table_manager()
     main_table = manager.get_table(CoreTables.MainTable)
