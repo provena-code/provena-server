@@ -70,7 +70,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             except Exception as e:
                 logger.info(f"Error reading request body for logging: {e}")
 
-    return request_validation_exception_handler(request, exc)
+    return await request_validation_exception_handler(request, exc)
 
 @app.exception_handler(OperationalError)
 async def db_handler(request: Request, exc: OperationalError):
@@ -92,7 +92,7 @@ async def global_exception_handler(request: Request, exc: Exception):
             request = request.decode("utf-8")
         except Exception as e:
             pass
-        await add_error_event(f"Internal server error: {exc}", request)
+        add_error_event(f"Internal server error: {exc}", request)
     except Exception as e:
         logger.error(f"Error logging internal server error: {e}")
     return JSONResponse(
