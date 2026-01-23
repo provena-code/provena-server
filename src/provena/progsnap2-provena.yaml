@@ -699,3 +699,24 @@ link_tables:
           The original content sent to the logging server.
     description: |
       A link table that records loggin error details.
+  - name: LinkAssignmentMap
+    id_column_names:
+      - SubjectID
+      - AssignmentID
+    additional_columns:
+      - name: CodeStateSection
+        requirement: Required
+        datatype: SourceLocation
+        description: |
+          CodeStateSection that maps to the given AssignmentID
+      - name: LastValidTimestamp
+        requirement: Required
+        datatype: Timestamp
+        description: |
+          The last Timestamp for which this mapping is valid.
+          Edits to a file after its submission should not be
+          considered relevant to that assignment.
+    description: |
+      A link table that maps CodeStateSections
+    unique_constraints:
+      - [SubjectID, AssignmentID, CodeStateSection]
