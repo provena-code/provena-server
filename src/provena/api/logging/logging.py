@@ -37,9 +37,9 @@ with db_writer_factory.create_writer() as writer:
     # Create the tables in the database
     try:
         writer.initialize_database()
+        # writer.update_database()
     except Exception as e:
         logger.error(f"Error initializing database: {e}")
-    # writer.update_database()
 
 # For use in Depends
 def create_writer():

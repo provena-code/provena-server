@@ -108,3 +108,16 @@ def get_code_state_sections_for_assignment_subject(
     results = reader.get_session().execute(statement).fetchall()
     ids = [row[0] for row in results]
     return ids
+
+from provena.api.read.logic.mapping import update_mapping_table
+
+@router.post("/update_mapping_table", operation_id="updateMappingTable")
+def update_mapping_table_endpoint(reader: SQLReader = Depends(create_reader)):
+    manager = reader.get_table_manager()
+    main_table = manager.get_table(CoreTables.MainTable)
+    mapping_table = manager.get_table("linkassignmentmap")
+    update_mapping_table(
+        reader.get_session(),
+        main_table,
+        mapping_table
+    )
