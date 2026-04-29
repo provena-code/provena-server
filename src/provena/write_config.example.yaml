@@ -15,6 +15,9 @@ database_config:
   - SessionID
   # Used for subission checking (hash of code)
   - CodeStateID
+  # Useful for browsing data
+  - ServerTimestamp
+  - ClientTimestamp
 
   metadata:
     Version: "1.0"
