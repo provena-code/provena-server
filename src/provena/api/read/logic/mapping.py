@@ -19,6 +19,8 @@ def update_mapping_table(session: Session, main_table: Table, mapping_table: Tab
     It should be run periodically to keep the mapping table up to date with new submissions and renames.
     """
 
+    logger.info("Updating mapping table with new submissions...")
+
     last_update = session.query(func.max(mapping_table.c.LastValidTimestamp)).scalar() or "0"
 
     # First, we get all submissions that have happened since the last update.
