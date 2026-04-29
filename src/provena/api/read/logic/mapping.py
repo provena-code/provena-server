@@ -13,30 +13,42 @@ from sqlalchemy.dialects.mysql import insert as mysql_insert
 
 
 def update_mapping_table(session: Session, main_table: Table, mapping_table: Table):
+    """
+    This function updates the mapping table with the CodeStateSections (files) that were submitted
+    for each Subject/Assignment pair. Note that a file may be used in multiple Assignments.
+    It should be run periodically to keep the mapping table up to date with new submissions and renames.
+    """
 
     last_update = session.query(func.max(mapping_table.c.LastValidTimestamp)).scalar() or "0"
 
-    # 1. Subquery for Latest Submissions
+    # First, we get all submissions that have happened since the last update.
+    # Submissions include the AssignmentID, and an approximate CodeStateSection (just the filename).
     latest_subs = session.query(
         main_table.c.SubjectID,
         main_table.c.AssignmentID,
         main_table.c.CodeStateID,
         main_table.c.CodeStateSection,
         main_table.c.ServerTimestamp,
+        # Get the most recent submission for each SubjectID + AssignmentID
         func.rank().over(
             partition_by=[main_table.c.SubjectID, main_table.c.AssignmentID],
             order_by=main_table.c.ServerTimestamp.desc()
         ).label('rank')
     ).filter(
         main_table.c.EventType == EventType.Submit,
+        # Only consider submissions that have occurred since the last update to the mapping table
         main_table.c.ServerTimestamp > last_update
     ).subquery()
 
-    # 2. Final Query with the Path Logic
+    # Now we find the *real* CodeStateSections that correspond to those submitted CodeStateSections
     mapping_query = session.query(
         main_table.c.SubjectID.label(Cols.SubjectID),
         main_table.c.CodeStateSection.label(Cols.CodeStateSection),
         latest_subs.c.AssignmentID.label(Cols.AssignmentID),
+        # The submission time becomes the "LastValidTimestamp" for this mapping,
+        # which tells us the latest time for which the file in question
+        # should be associated with the given AssignmentID.
+        # Rdits after this weren't submitted, so they likely aren't associated with the Assignment.
         latest_subs.c.ServerTimestamp.label("LastValidTimestamp")
     ).join(
         latest_subs,
@@ -45,9 +57,16 @@ def update_mapping_table(session: Session, main_table: Table, mapping_table: Tab
             main_table.c.SubjectID == latest_subs.c.SubjectID
         )
     ).filter(
+        # Include only the most recent submission for each SubjectID + AssignmentID
         latest_subs.c.rank == 1,
-        # TODO: Undo: just for testing
-        # main_table.c.EventType != EventType.Submit,
+
+        # Exclude Submissions themselves since they can have unreliable CodeStateSections
+        # (not full paths, and can be reused across different files)
+        main_table.c.EventType != EventType.Submit,
+
+        # We require either that the CodeStateSections match exactly,
+        # or that the MainTable CodeStateSection is a path that ends with the
+        # submitted CodeStateSection
         or_(
             main_table.c.CodeStateSection == latest_subs.c.CodeStateSection,
             main_table.c.CodeStateSection.like(func.concat('%/', latest_subs.c.CodeStateSection))
@@ -61,6 +80,7 @@ def update_mapping_table(session: Session, main_table: Table, mapping_table: Tab
         return  # Nothing to update
 
     # TODO: Add renames!
+    # This should probably be done here, so we don't have to redo that work every time
 
     stmnt = mysql_insert(mapping_table).values([
         {
