@@ -79,7 +79,6 @@ def add_codestate_ids(events: List[dict]) -> None:
     for event in events:
         if Cols.Code in event:
             code  = get_canonical_string(event[Cols.Code])
-            event[Cols.Code] = code
             event[Cols.CodeStateID] = generate_code_hash(code, False)
 
 @router.post("/events", operation_id="addEvents", response_model=LogResult)
