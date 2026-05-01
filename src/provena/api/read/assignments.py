@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from fastapi.params import Depends
 from pydantic import BaseModel
 from progsnap2.database.reader.sql_reader import SQLReader
-from progsnap2.spec.enums import CoreTables, EventType, MainTableColumns as Cols
+from progsnap2.spec.enums import CoreTables, EventType, MainTableColumns as Cols, LinkTableNames
 from provena.api.read.common import create_reader, require_api_key
 import pandas as pd
 
@@ -33,23 +33,20 @@ class AssignmentSubjectsResponseItem(BaseModel):
 def get_subject_stats_for_assignment(assignment_id: str, reader: SQLReader = Depends(create_reader)) -> list[AssignmentSubjectsResponseItem]:
     manager = reader.get_table_manager()
     main_table = manager.get_table(CoreTables.MainTable)
+    mapping_table = manager.get_table("linkassignmentmap")
+
+    update_mapping_table(reader.get_session(), main_table, mapping_table)
 
     # Find all the Submissions for this AssignmentID
     # and get who submitted what
     submitted_files = select(
-        main_table.c.SubjectID,
-        main_table.c.CodeStateSection,
-        main_table.c.CodeStateID,
-        func.max(main_table.c.ServerTimestamp).label("LastSubmissionTime")
+        mapping_table.c.SubjectID,
+        mapping_table.c.CodeStateSection,
+        mapping_table.c.LastValidTimestamp,
     ).where(and_(
         main_table.c.AssignmentID == assignment_id,
-        main_table.c.EventType == EventType.Submit,
         main_table.c.SubjectID.isnot(None),
-        main_table.c.CodeStateSection.isnot(None)
-    )).group_by(
-        main_table.c.SubjectID,
-        main_table.c.CodeStateSection
-    ).cte("submitted_files")
+    )).cte("submitted_files")
 
     # TODO: Need to identify CodeStateSections for a given CodeStateID
     # since the CodeStateSection itself is unreliable here (not a full path!)
@@ -67,7 +64,7 @@ def get_subject_stats_for_assignment(assignment_id: str, reader: SQLReader = Dep
     statement = select(*select_cols).where(
         and_(
             main_table.c.EventType == EventType.FileEdit,
-            main_table.c.ServerTimestamp <= submitted_files.c.LastSubmissionTime
+            main_table.c.ServerTimestamp <= submitted_files.c.LastValidTimestamp
         )
     ).join(
         submitted_files,
@@ -82,7 +79,7 @@ def get_subject_stats_for_assignment(assignment_id: str, reader: SQLReader = Dep
     #     (main_table.c[Cols.EventType] == EventType.FileEdit)
     # )
     edits = pd.read_sql_query(statement, reader.get_session().connection())
-    print(edits)
+    # print(edits)
     # Get the sum of inserted and deleted text lengths per subject
     edits[Cols.InsertText + "Length"] = edits[Cols.InsertText].str.len().fillna(0)
     edits["DeleteTextLength"] = edits[Cols.DeleteLength]
@@ -100,10 +97,10 @@ def get_code_state_sections_for_assignment_subject(
     reader: SQLReader = Depends(create_reader)
 ):
     manager = reader.get_table_manager()
-    main_table = manager.get_table(CoreTables.MainTable)
-    statement = select(main_table.c[Cols.CodeStateSection].distinct()).where(
-        (main_table.c[Cols.AssignmentID] == assignment_id) &
-        (main_table.c[Cols.SubjectID] == subject_id)
+    mapping_table = manager.get_table("linkassignmentmap")
+    statement = select(mapping_table.c[Cols.CodeStateSection].distinct()).where(
+        (mapping_table.c[Cols.AssignmentID] == assignment_id) &
+        (mapping_table.c[Cols.SubjectID] == subject_id)
     )
     results = reader.get_session().execute(statement).fetchall()
     ids = [row[0] for row in results]
