@@ -3,11 +3,11 @@ from fastapi import APIRouter
 from fastapi.params import Depends
 from pydantic import BaseModel
 from progsnap2.database.reader.sql_reader import SQLReader
-from progsnap2.spec.enums import CoreTables, EventType, MainTableColumns as Cols, LinkTableNames
+from progsnap2.spec.enums import CoreTables, EventType, MainTableColumns as Cols,  EditType
 from provena.api.read.common import create_reader, require_api_key
 import pandas as pd
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, case, func, select
 
 router = APIRouter(
     prefix="/read",
@@ -26,8 +26,9 @@ def get_assignments(reader: SQLReader = Depends(create_reader)):
 
 class AssignmentSubjectsResponseItem(BaseModel):
     SubjectID: str
-    InsertTextLength: int
-    DeleteTextLength: int
+    Insertions: int
+    Deletions: int
+    Replacements: int
 
 @router.get("/assignments/{assignment_id}/subjects", operation_id="getSubjectStatsForAssignment")
 def get_subject_stats_for_assignment(assignment_id: str, reader: SQLReader = Depends(create_reader)) -> list[AssignmentSubjectsResponseItem]:
@@ -48,20 +49,12 @@ def get_subject_stats_for_assignment(assignment_id: str, reader: SQLReader = Dep
         main_table.c.SubjectID.isnot(None),
     )).cte("submitted_files")
 
-    # TODO: Need to identify CodeStateSections for a given CodeStateID
-    # since the CodeStateSection itself is unreliable here (not a full path!)
-
-    select_cols = [
-        Cols.SubjectID,
-        Cols.InsertText,
-        # TODO: Need a different call if using DeleteText
-        Cols.DeleteLength,
-    ]
-    select_cols = [main_table.c[col] for col in select_cols]
-
-    # Final all edits made by these subjects in these code state sections
-    # before the submission
-    statement = select(*select_cols).where(
+    statement = select(
+        main_table.c.SubjectID,
+        func.sum(case((main_table.c.EditType == str(EditType.Insert), 1), else_=0)).label("Insertions"),
+        func.sum(case((main_table.c.EditType == str(EditType.Delete), 1), else_=0)).label("Deletions"),
+        func.sum(case((main_table.c.EditType == str(EditType.Replace), 1), else_=0)).label("Replacements")
+    ).where(
         and_(
             main_table.c.EventType == EventType.FileEdit,
             main_table.c.ServerTimestamp <= submitted_files.c.LastValidTimestamp
@@ -72,23 +65,12 @@ def get_subject_stats_for_assignment(assignment_id: str, reader: SQLReader = Dep
             main_table.c.SubjectID == submitted_files.c.SubjectID,
             main_table.c.CodeStateSection == submitted_files.c.CodeStateSection
         )
+    ).group_by(
+        main_table.c.SubjectID
     )
 
-    # statement = select(*select_cols).where(
-    #     (main_table.c[Cols.AssignmentID] == assignment_id) &
-    #     (main_table.c[Cols.EventType] == EventType.FileEdit)
-    # )
-    edits = pd.read_sql_query(statement, reader.get_session().connection())
-    # print(edits)
-    # Get the sum of inserted and deleted text lengths per subject
-    edits[Cols.InsertText + "Length"] = edits[Cols.InsertText].str.len().fillna(0)
-    edits["DeleteTextLength"] = edits[Cols.DeleteLength]
-    summary = edits.groupby(Cols.SubjectID).agg({
-        Cols.InsertText + "Length": "sum",
-        "DeleteTextLength": "sum"
-    }).reset_index()
-    as_dict = summary.to_dict(orient="records")
-    return [AssignmentSubjectsResponseItem(**item) for item in as_dict]
+    results = reader.get_session().execute(statement).fetchall()
+    return [AssignmentSubjectsResponseItem(**dict(row)) for row in results]
 
 @router.get("/assignments/{assignment_id}/{subject_id}/code_state_sections", operation_id="getCodeStateSectionsForAssignmentSubject")
 def get_code_state_sections_for_assignment_subject(
