@@ -26,51 +26,69 @@ def get_assignments(reader: SQLReader = Depends(create_reader)):
 
 class AssignmentSubjectsResponseItem(BaseModel):
     SubjectID: str
-    Insertions: int
-    Deletions: int
-    Replacements: int
+    LastSubmissionTime: str
+    MaxScore: float
 
 @router.get("/assignments/{assignment_id}/subjects", operation_id="getSubjectStatsForAssignment")
 def get_subject_stats_for_assignment(assignment_id: str, reader: SQLReader = Depends(create_reader)) -> list[AssignmentSubjectsResponseItem]:
     manager = reader.get_table_manager()
     main_table = manager.get_table(CoreTables.MainTable)
-    mapping_table = manager.get_table("linkassignmentmap")
 
-    update_mapping_table(reader.get_session(), main_table, mapping_table)
-
-    # Find all the Submissions for this AssignmentID
-    # and get who submitted what
-    submitted_files = select(
-        mapping_table.c.SubjectID,
-        mapping_table.c.CodeStateSection,
-        mapping_table.c.LastValidTimestamp,
-    ).where(and_(
-        main_table.c.AssignmentID == assignment_id,
-        main_table.c.SubjectID.isnot(None),
-    )).cte("submitted_files")
-
-    statement = select(
+    submissions = select(
         main_table.c.SubjectID,
-        func.sum(case((main_table.c.EditType == str(EditType.Insert), 1), else_=0)).label("Insertions"),
-        func.sum(case((main_table.c.EditType == str(EditType.Delete), 1), else_=0)).label("Deletions"),
-        func.sum(case((main_table.c.EditType == str(EditType.Replace), 1), else_=0)).label("Replacements")
+        func.max(main_table.c.ServerTimestamp).label("LastSubmissionTime"),
+        func.max(main_table.c.Score).label("MaxScore")
     ).where(
-        and_(
-            main_table.c.EventType == EventType.FileEdit,
-            main_table.c.ServerTimestamp <= submitted_files.c.LastValidTimestamp
-        )
-    ).join(
-        submitted_files,
-        and_(
-            main_table.c.SubjectID == submitted_files.c.SubjectID,
-            main_table.c.CodeStateSection == submitted_files.c.CodeStateSection
-        )
-    ).group_by(
-        main_table.c.SubjectID
-    )
+        (main_table.c.AssignmentID == assignment_id) &
+        (main_table.c.EventType == EventType.Submit) &
+        (main_table.c.SubjectID.isnot(None))
+    ).group_by(main_table.c.SubjectID)
 
-    results = reader.get_session().execute(statement).fetchall()
-    return [AssignmentSubjectsResponseItem(**dict(row)) for row in results]
+    results = reader.get_session().execute(submissions).fetchall()
+    return results
+
+    # This old version attempted to get stats for each submission, but it
+    # turns out this would require a lot of indexing, and I think it's better
+    # to think about this as a chron task that extracts more useful stats more
+    # efficiently.
+
+    # mapping_table = manager.get_table("linkassignmentmap")
+
+    # update_mapping_table(reader.get_session(), main_table, mapping_table)
+
+    # # Find all the Submissions for this AssignmentID
+    # # and get who submitted what
+    # submitted_files = select(
+    #     mapping_table.c.SubjectID,
+    #     mapping_table.c.CodeStateSection,
+    #     mapping_table.c.LastValidTimestamp,
+    # ).where(and_(
+    #     main_table.c.AssignmentID == assignment_id,
+    #     main_table.c.SubjectID.isnot(None),
+    # )).cte("submitted_files")
+
+    # statement = select(
+    #     main_table.c.SubjectID,
+    #     func.sum(case((main_table.c.EditType == str(EditType.Insert), 1), else_=0)).label("Insertions"),
+    #     func.sum(case((main_table.c.EditType == str(EditType.Delete), 1), else_=0)).label("Deletions"),
+    #     func.sum(case((main_table.c.EditType == str(EditType.Replace), 1), else_=0)).label("Replacements")
+    # ).where(
+    #     and_(
+    #         main_table.c.EventType == EventType.FileEdit,
+    #         main_table.c.ServerTimestamp <= submitted_files.c.LastValidTimestamp
+    #     )
+    # ).join(
+    #     submitted_files,
+    #     and_(
+    #         main_table.c.SubjectID == submitted_files.c.SubjectID,
+    #         main_table.c.CodeStateSection == submitted_files.c.CodeStateSection
+    #     )
+    # ).group_by(
+    #     main_table.c.SubjectID
+    # )
+
+    # results = reader.get_session().execute(statement).fetchall()
+    # return [AssignmentSubjectsResponseItem(**dict(row)) for row in results]
 
 @router.get("/assignments/{assignment_id}/{subject_id}/code_state_sections", operation_id="getCodeStateSectionsForAssignmentSubject")
 def get_code_state_sections_for_assignment_subject(
