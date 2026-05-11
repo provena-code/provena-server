@@ -33,6 +33,7 @@ class AssignmentSubjectsResponseItem(BaseModel):
 def get_subject_stats_for_assignment(assignment_id: str, reader: SQLReader = Depends(create_reader)) -> list[AssignmentSubjectsResponseItem]:
     manager = reader.get_table_manager()
     main_table = manager.get_table(CoreTables.MainTable)
+    session = reader.get_session()
 
     submissions = select(
         main_table.c.SubjectID,
@@ -44,7 +45,7 @@ def get_subject_stats_for_assignment(assignment_id: str, reader: SQLReader = Dep
         (main_table.c.SubjectID.isnot(None))
     ).group_by(main_table.c.SubjectID)
 
-    results = reader.get_session().execute(submissions).fetchall()
+    results = session.execute(submissions).fetchall()
     return results
 
     # This old version attempted to get stats for each submission, but it
@@ -52,9 +53,7 @@ def get_subject_stats_for_assignment(assignment_id: str, reader: SQLReader = Dep
     # to think about this as a chron task that extracts more useful stats more
     # efficiently.
 
-    # mapping_table = manager.get_table("linkassignmentmap")
-
-    # update_mapping_table(reader.get_session(), main_table, mapping_table)
+    # mapping_table = get_mapping_table(session, manager)
 
     # # Find all the Submissions for this AssignmentID
     # # and get who submitted what
@@ -87,7 +86,7 @@ def get_subject_stats_for_assignment(assignment_id: str, reader: SQLReader = Dep
     #     main_table.c.SubjectID
     # )
 
-    # results = reader.get_session().execute(statement).fetchall()
+    # results = session.execute(statement).fetchall()
     # return [AssignmentSubjectsResponseItem(**dict(row)) for row in results]
 
 @router.get("/assignments/{assignment_id}/{subject_id}/code_state_sections", operation_id="getCodeStateSectionsForAssignmentSubject")
@@ -97,7 +96,8 @@ def get_code_state_sections_for_assignment_subject(
     reader: SQLReader = Depends(create_reader)
 ):
     manager = reader.get_table_manager()
-    mapping_table = manager.get_table("linkassignmentmap")
+    session = reader.get_session()
+    mapping_table = get_mapping_table(session, manager)
     statement = select(mapping_table.c[Cols.CodeStateSection].distinct()).where(
         (mapping_table.c[Cols.AssignmentID] == assignment_id) &
         (mapping_table.c[Cols.SubjectID] == subject_id)
@@ -106,15 +106,9 @@ def get_code_state_sections_for_assignment_subject(
     ids = [row[0] for row in results]
     return ids
 
-from provena.api.read.logic.mapping import update_mapping_table
+from provena.api.read.logic.mapping import get_mapping_table, update_mapping_table
 
 @router.post("/update_mapping_table", operation_id="updateMappingTable")
 def update_mapping_table_endpoint(reader: SQLReader = Depends(create_reader)):
     manager = reader.get_table_manager()
-    main_table = manager.get_table(CoreTables.MainTable)
-    mapping_table = manager.get_table("linkassignmentmap")
-    update_mapping_table(
-        reader.get_session(),
-        main_table,
-        mapping_table
-    )
+    get_mapping_table(reader.get_session(), manager)

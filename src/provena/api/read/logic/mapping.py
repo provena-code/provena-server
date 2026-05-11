@@ -1,16 +1,24 @@
 
 import logging
+
+from progsnap2.database.sql_table_manager import SQLTableManager
 logger = logging.getLogger(__name__)
 
 from select import select
 from progsnap2.spec.enums import EventType
-from progsnap2.spec.enums import MainTableColumns as Cols
+from progsnap2.spec.enums import MainTableColumns as Cols, CoreTables
 
 from sqlalchemy import Column, Table, insert
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 
+
+def get_mapping_table(session: Session, table_manager: SQLTableManager) -> Table:
+    mapping_table =  table_manager.get_table("linkassignmentmap")
+    main_table = table_manager.get_table(CoreTables.MainTable)
+    update_mapping_table(session, main_table, mapping_table)
+    return mapping_table
 
 def update_mapping_table(session: Session, main_table: Table, mapping_table: Table):
     """
