@@ -42,14 +42,16 @@ def get_all_edits(
 def get_student_edits(
     subject_id: Annotated[str, Query(description="SubjectID")],
     codestate_section: Annotated[str, Query(description="CodestateSection")],
+    end_timestamp: Annotated[str, Query(description="End timestamp (inclusive)")] = None,
     reader: SQLReader = Depends(create_reader)
 ):
     manager = reader.get_table_manager()
     main_table = manager.get_table(CoreTables.MainTable)
+    conditions = (main_table.c[Cols.SubjectID] == subject_id) & (main_table.c[Cols.CodeStateSection] == codestate_section)
+    if end_timestamp:
+        conditions = conditions & (main_table.c[Cols.ClientTimestamp] <= end_timestamp)
     result = _get_edits(
-        (main_table.c[Cols.SubjectID] == subject_id) &
-        # (main_table.c[Cols.AssignmentID] == assignment_id) &
-        (main_table.c[Cols.CodeStateSection] == codestate_section),
+        conditions,
         reader
     )
     # convert to a plain list of dicts
