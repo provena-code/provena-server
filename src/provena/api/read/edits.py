@@ -13,31 +13,6 @@ router = APIRouter(
     dependencies=[Depends(require_api_key)],
 )
 
-@router.get("/{assignment_id}/edits")
-def get_all_edits(
-    assignment_id: str,
-    reader: SQLReader = Depends(create_reader)
-):
-    manager = reader.get_table_manager()
-    main_table = manager.get_table(CoreTables.MainTable)
-    result = _get_edits(
-        (main_table.c[Cols.AssignmentID] == assignment_id),
-        reader
-    )
-    # convert to a plain list of dicts
-    result = [dict(row) for row in result]
-    subject_map = {}
-    for row in result:
-        subject_id = row[Cols.SubjectID]
-        if subject_id not in subject_map:
-            # TODO: Remove
-            if len(subject_map) >= 3:
-                continue
-            subject_map[subject_id] = []
-        subject_map[subject_id].append(row)
-    edits = process_edits(subject_map)
-    return edits
-
 @router.get("/edits", operation_id="getFileEdits")
 def get_student_edits(
     subject_id: Annotated[str, Query(description="SubjectID")],
@@ -45,32 +20,77 @@ def get_student_edits(
     end_timestamp: Annotated[str, Query(description="End timestamp (inclusive)")] = None,
     reader: SQLReader = Depends(create_reader)
 ):
+    # Get edit time ranges for each CodeStateSection that's been renamed to this
+    ranges = _get_all_edit_ranges(subject_id, codestate_section, end_timestamp, reader)
+    # TODO: Remove
+    print(ranges)
+    # Then get the edits for each range and combine them
+    edits = _fetch_edit_ranges(subject_id, ranges, reader)
+    # convert to a plain list of dicts
+    result = [dict(row) for row in edits]
+    return result
+
+
+def _get_all_edit_ranges(subject_id, final_codestate_section: str, max_client_timestamp: str, reader: SQLReader):
+    ranges = [{
+        Cols.CodeStateSection: final_codestate_section,
+        "MaxClientTimestamp": max_client_timestamp,
+    }]
+
+    # Find the most recent rename where DestinationCodestateSection == final_codestate_section, and get the SourceCodeStateSection from that rename.
     manager = reader.get_table_manager()
     main_table = manager.get_table(CoreTables.MainTable)
-    conditions = (main_table.c[Cols.SubjectID] == subject_id) & (main_table.c[Cols.CodeStateSection] == codestate_section)
-    if end_timestamp:
-        conditions = conditions & (main_table.c[Cols.ClientTimestamp] <= end_timestamp)
-    result = _get_edits(
-        conditions,
+
+    condition = (main_table.c[Cols.SubjectID] == subject_id) & \
+        (main_table.c[Cols.EventType] == EventType.FileRename) & \
+        (main_table.c[Cols.DestinationCodeStateSection] == final_codestate_section)
+    if max_client_timestamp:
+        condition = condition & (main_table.c[Cols.ClientTimestamp] <= max_client_timestamp)
+
+    rename_query = select(
+        main_table.c[Cols.CodeStateSection],
+        main_table.c[Cols.ClientTimestamp].label("MaxClientTimestamp")
+    ).where(condition).order_by(
+        main_table.c[Cols.ClientTimestamp].desc()
+    ).limit(1)
+
+    rename_result = reader.get_session().execute(rename_query).mappings().first()
+    if rename_result is None:
+        return ranges
+
+    # If there was a rename, recurse to find earlier ranges
+    ranges = _get_all_edit_ranges(
+        subject_id,
+        rename_result[Cols.CodeStateSection],
+        rename_result["MaxClientTimestamp"],
         reader
-    )
-    # convert to a plain list of dicts
-    result = [dict(row) for row in result]
-    return result
+    ) + ranges
+
+    return ranges
+
+
+def _fetch_edit_ranges(subject_id: str, ranges: list[dict], reader: SQLReader):
+    all_edits = []
+    main_table = reader.get_table_manager().get_table(CoreTables.MainTable)
+    for i in range(len(ranges)):
+        edit_range = ranges[i]
+        condition = (main_table.c[Cols.SubjectID] == subject_id) & \
+            (main_table.c[Cols.CodeStateSection] == edit_range[Cols.CodeStateSection])
+        if edit_range["MaxClientTimestamp"]:
+            condition = condition & (main_table.c[Cols.ClientTimestamp] <= edit_range["MaxClientTimestamp"])
+        if i > 0:
+            prior_range = ranges[i - 1]
+            condition = condition & (main_table.c[Cols.ClientTimestamp] >= prior_range["MaxClientTimestamp"])
+        edits = _get_edits(condition, reader)
+        all_edits += edits
+    return all_edits
+
 
 # TODO: This should also work with renames!
 def _get_edits_query(filter: any, reader: SQLReader):
     manager = reader.get_table_manager()
     main_table = manager.get_table(CoreTables.MainTable)
-    # cols = [
-    #     Cols.SubjectID, Cols.EventID, Cols.ClientTimestamp,
-    #     Cols.SourceLocation,
-    #     "InsertText", "DeleteText", "DeleteLength"
-    # ]
-    # cols = [main_table.c[col] for col in cols]
-    # statement = select(*cols).where(
     statement = select(main_table).where(
-        # (main_table.c[Cols.EventType] == EventType.FileEdit) &
         # Just use client events for now...
         (main_table.c[Cols.ClientTimestamp] != None) &
         filter
