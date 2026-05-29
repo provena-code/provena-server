@@ -58,8 +58,13 @@ def update_mapping_table(session: Session, main_table: Table, mapping_table: Tab
         # The submission time becomes the "LastValidTimestamp" for this mapping,
         # which tells us the latest time for which the file in question
         # should be associated with the given AssignmentID.
-        # Rdits after this weren't submitted, so they likely aren't associated with the Assignment.
-        latest_subs.c.ServerTimestamp.label("LastValidTimestamp")
+        # This should only be compared with other Submit events' ServerTimestamps,
+        # since other in-IDE events may have been submitted after they occurred.
+        latest_subs.c.ServerTimestamp.label("LastValidTimestamp"),
+        # Instead, we can filter out events that occur after the submitted
+        # CodeStateID has been achieved, since these presumably happened after submission
+        # (or submission could have occurred at any rate).
+        main_table.c.CodeStateID.label(Cols.CodeStateID),
     ).join(
         latest_subs,
         and_(
@@ -74,7 +79,8 @@ def update_mapping_table(session: Session, main_table: Table, mapping_table: Tab
         # (not full paths, and can be reused across different files)
         main_table.c.EventType != EventType.Submit,
 
-        # We require either that the CodeStateSections match exactly,
+        # In addition to requiring an exact match on CodeStateID to the submission,
+        # we also require either that the CodeStateSections match exactly,
         # or that the MainTable CodeStateSection is a path that ends with the
         # submitted CodeStateSection
         or_(
@@ -89,15 +95,13 @@ def update_mapping_table(session: Session, main_table: Table, mapping_table: Tab
     if not results:
         return  # Nothing to update
 
-    # TODO: Add renames!
-    # This should probably be done here, so we don't have to redo that work every time
-
     stmnt = mysql_insert(mapping_table).values([
         {
             Cols.SubjectID: row.SubjectID,
             Cols.AssignmentID: row.AssignmentID,
             Cols.CodeStateSection: row.CodeStateSection,
-            "LastValidTimestamp": row.LastValidTimestamp
+            "LastValidTimestamp": row.LastValidTimestamp,
+            Cols.CodeStateID: row.CodeStateID
         }
         for row in results
     ])
@@ -109,38 +113,4 @@ def update_mapping_table(session: Session, main_table: Table, mapping_table: Tab
 
     session.execute(stmnt)
     session.commit()
-
-
-# TODO: This is incomplete, and I'm not sure of a good way to
-# do this in a batch and still be recursive...
-def update_mapping_table_for_renames(session: Session, main_table: Table, mapping_table: Table, last_update: str):
-    def c(col: str) -> Column:
-        return main_table.c[col]
-
-    # TODO: This means we need an index on LastValidTimestamp in the mapping table
-    # First get all CodeStateSections that have been mapped since the last update
-    recent_mappings = session.query(
-        mapping_table.c.SubjectID,
-        mapping_table.c.AssignmentID,
-        mapping_table.c.CodeStateSection
-    ).filter(
-        mapping_table.c.LastValidTimestamp > last_update
-    ).subquery()
-
-    # Merge the recent_mappings with any rename events in the MainTable
-    # Where the DestinationCodeStateSection matches a recently mapped CodeStateSection
-    renames = session.query(
-        c(Cols.SubjectID),
-        c(Cols.CodeStateSection),
-        recent_mappings.c.AssignmentID,
-        recent_mappings.c.LastValidTimestamp
-    ).join(
-        recent_mappings,
-        and_(
-            c(Cols.SubjectID) == recent_mappings.c.SubjectID,
-            c(Cols.DestinationCodeStateSection) == recent_mappings.c.CodeStateSection
-        )
-    ).filter(
-        c(Cols.EventType) == EventType.Rename
-    ).subquery()
 

@@ -716,6 +716,14 @@ link_tables:
           The last Timestamp for which this mapping is valid.
           Edits to a file after its submission should not be
           considered relevant to that assignment.
+          Note that this is a ServerTimestamp and it cannot be
+          used directly to associate logs with submissions.
+      - name: CodeStateID
+        requirement: Required
+        datatype: ID
+        description: |
+          The CodeStateID of the last submission of this file.
+          Used to identify a likely code submission.
     description: |
       A link table that maps CodeStateSections
     unique_constraints:
