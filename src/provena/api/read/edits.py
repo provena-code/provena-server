@@ -16,10 +16,12 @@ router = APIRouter(
 @router.get("/edits", operation_id="getFileEdits")
 def get_student_edits(
     subject_id: Annotated[str, Query(description="SubjectID")],
-    codestate_section: Annotated[str, Query(description="CodestateSection")],
-    end_timestamp: Annotated[str, Query(description="End timestamp (inclusive)")] = None,
+    codestate_section: Annotated[str, Query(description="CodeStateSection")],
+    last_codestate_id: Annotated[str, Query(description="Last CodeStateID")] = None,
     reader: SQLReader = Depends(create_reader)
 ):
+    end_timestamp = _get_end_client_timestamp(last_codestate_id, reader)
+
     # Get edit time ranges for each CodeStateSection that's been renamed to this
     ranges = _get_all_edit_ranges(subject_id, codestate_section, end_timestamp, reader)
     # TODO: Remove
@@ -30,6 +32,24 @@ def get_student_edits(
     result = [dict(row) for row in edits]
     return result
 
+def _get_end_client_timestamp(last_code_state_id: str, reader: SQLReader):
+    if not last_code_state_id:
+        return None
+
+    manager = reader.get_table_manager()
+    main_table = manager.get_table(CoreTables.MainTable)
+
+    # Get the first ClientTimestamp that matches this CodeStateID,
+    # For speed we use the first by insertion order, but that should
+    # almost always be the first that actually happened on the client
+    # and there's little harm to getting this wrong, since either way
+    # we end in the submitted state.
+    statement = select(main_table.c.ClientTimestamp).where(
+        main_table.c.CodeStateID == last_code_state_id
+    ).limit(1)
+
+    result = reader.get_session().execute(statement).scalar_one_or_none()
+    return result
 
 def _get_all_edit_ranges(subject_id, final_codestate_section: str, max_client_timestamp: str, reader: SQLReader):
     ranges = [{
