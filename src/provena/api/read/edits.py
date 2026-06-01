@@ -21,6 +21,9 @@ def get_student_edits(
     reader: SQLReader = Depends(create_reader)
 ):
     end_timestamp = _get_end_client_timestamp(last_codestate_id, reader)
+    if end_timestamp is not None:
+        # Add a null character to the end of the timestamp to ensure we include any edits that happened at the same timestamp
+        end_timestamp += "\u0000"
 
     # Get edit time ranges for each CodeStateSection that's been renamed to this
     ranges = _get_all_edit_ranges(subject_id, codestate_section, end_timestamp, reader)
@@ -65,7 +68,7 @@ def _get_all_edit_ranges(subject_id, final_codestate_section: str, max_client_ti
         (main_table.c[Cols.EventType] == EventType.FileRename) & \
         (main_table.c[Cols.DestinationCodeStateSection] == final_codestate_section)
     if max_client_timestamp:
-        condition = condition & (main_table.c[Cols.ClientTimestamp] <= max_client_timestamp)
+        condition = condition & (main_table.c[Cols.ClientTimestamp] < max_client_timestamp)
 
     rename_query = select(
         main_table.c[Cols.CodeStateSection],
@@ -122,5 +125,11 @@ def _get_edits_query(filter: any, reader: SQLReader):
 
 def _get_edits(filter: any, reader: SQLReader):
     statement = _get_edits_query(filter, reader)
-    results = reader.get_session().execute(statement).mappings().all()
+    raw_results = reader.get_session().execute(statement).mappings().all()
+    # Return the results as a list of dicts, but remove any null values to
+    # reduce the size of the payload and make it easier for clients to work with
+    results = []
+    for row in raw_results:
+        row_dict = {k: v for k, v in row.items() if v is not None}
+        results.append(row_dict)
     return results
