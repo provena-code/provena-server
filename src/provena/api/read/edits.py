@@ -6,12 +6,29 @@ from progsnap2.spec.enums import CoreTables, MainTableColumns as Cols, EventType
 from provena.api.read.common import create_reader, require_api_key
 from provena.bridge.node_bridge import process_edits
 
-from sqlalchemy import select
+from sqlalchemy import Table, func, select
 
 router = APIRouter(
     prefix="/read",
     dependencies=[Depends(require_api_key)],
 )
+
+@router.get("/edits_in_range", operation_id="getEditsInRange")
+def get_student_edits(
+    subject_id: Annotated[str, Query(description="SubjectID")],
+    start_client_timestamp: Annotated[str, Query(description="Start Client Timestamp")],
+    # TODO: Could replace with last_codestate_id if I wanted to be more accurate...
+    end_client_timestamp: Annotated[str, Query(description="End Client Timestamp")],
+    reader: SQLReader = Depends(create_reader)
+):
+    manager = reader.get_table_manager()
+    main_table = manager.get_table(CoreTables.MainTable)
+    filter = main_table.c[Cols.SubjectID] == subject_id & \
+        main_table.c[Cols.ClientTimestamp] >= start_client_timestamp & \
+        main_table.c[Cols.ClientTimestamp] <= end_client_timestamp
+    edits = _get_edits(filter, reader)
+    result = [dict(row) for row in edits]
+    return result
 
 @router.get("/edits", operation_id="getFileEdits")
 def get_student_edits(
@@ -27,13 +44,31 @@ def get_student_edits(
 
     # Get edit time ranges for each CodeStateSection that's been renamed to this
     ranges = _get_all_edit_ranges(subject_id, codestate_section, end_timestamp, reader)
-    # TODO: Remove
-    print(ranges)
     # Then get the edits for each range and combine them
     edits = _fetch_edit_ranges(subject_id, ranges, reader)
     # convert to a plain list of dicts
     result = [dict(row) for row in edits]
     return result
+
+# TODO: Not sure if I want to use this; probably not and I'll just use time ranges instead,
+# but may still be useful for figuring out those ranges...
+def find_coedited_files(events: list[dict], reader: SQLReader):
+    session_ids = set((row[Cols.SessionID]) for row in events if Cols.SessionID in row)
+    edited_files = set((row[Cols.CodeStateSection]) for row in events if Cols.CodeStateSection in row)
+
+    main_table = reader.get_table_manager().get_table(CoreTables.MainTable)
+
+    statement = select(main_table.c[Cols.SessionID], main_table.c[Cols.CodeStateSection]).where(
+        (main_table.c[Cols.SessionID].in_(session_ids)) &
+        (func.not_(main_table.c[Cols.CodeStateSection].in_(edited_files))) &
+        (main_table.c[Cols.EventType] == EventType.FileCopyText)
+    ).distinct()
+
+    results = reader.get_session().execute(statement).mappings().all()
+    print(results)
+    coedited_files = set(row[Cols.CodeStateSection] for row in results)
+    print(coedited_files)
+
 
 def _get_end_client_timestamp(last_code_state_id: str, reader: SQLReader):
     if not last_code_state_id:
