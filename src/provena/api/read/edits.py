@@ -6,7 +6,7 @@ from progsnap2.spec.enums import CoreTables, MainTableColumns as Cols, EventType
 from provena.api.read.common import create_reader, require_api_key
 from provena.bridge.node_bridge import process_edits
 
-from sqlalchemy import Table, func, select
+from sqlalchemy import Table, and_, func, select
 
 router = APIRouter(
     prefix="/read",
@@ -23,9 +23,11 @@ def get_student_edits(
 ):
     manager = reader.get_table_manager()
     main_table = manager.get_table(CoreTables.MainTable)
-    filter = main_table.c[Cols.SubjectID] == subject_id & \
-        main_table.c[Cols.ClientTimestamp] >= start_client_timestamp & \
+    filter = and_(
+        main_table.c[Cols.SubjectID] == subject_id,
+        main_table.c[Cols.ClientTimestamp] >= start_client_timestamp,
         main_table.c[Cols.ClientTimestamp] <= end_client_timestamp
+    )
     edits = _get_edits(filter, reader)
     result = [dict(row) for row in edits]
     return result
