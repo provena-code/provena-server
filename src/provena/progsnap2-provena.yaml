@@ -10,7 +10,7 @@ enum_types:
       - name: Git
         description: CodeStates will be stored in Git repositories, with commit hashes used as CodeStateIDs, organized by SubjectID and ProjectID.
       - name: Keystroke
-        description: Rather than directly storing Codestates, the MainTable will contain InsertedText and DeletedText columns tracking keystroke-level insertions and deletions, from which CodeStates can be reconstructed.
+        description: Rather than directly storing Codestates, the MainTable will contain InsertText and DeleteText/DeleteLength columns tracking keystroke-level insertions and deletions, from which CodeStates can be reconstructed.
 
   - name: EventInitiator
     values:
