@@ -11,9 +11,10 @@ from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.sessions import SessionMiddleware
 
 from provena.api.logging.logging import add_error_event, add_malformatted_events
-from provena.configs import api_config
+from provena.configs import api_config, auth_config
 import provena.api
 
 # Set python's logging level to uvicorns if uvicorn is being used
@@ -32,6 +33,12 @@ app.add_middleware(
     allow_methods=cors_config.allow_methods,
     allow_headers=cors_config.allow_headers,
 )
+
+# Backs the short-lived server-side login session (OAuth state, and the
+# client_redirect_uri/client_type passed to /auth/login) -- see
+# provena.api.auth.auth. Not used for issued API tokens, which are opaque and
+# DB-backed.
+app.add_middleware(SessionMiddleware, secret_key=auth_config.session_secret_key)
 
 for module_info in pkgutil.walk_packages(provena.api.__path__, provena.api.__name__ + "."):
     # logger.info(f"Loading API module: {module_info.name}")

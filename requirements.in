@@ -4,4 +4,7 @@ fastapi
 uvicorn
 sqlalchemy
 jinja2
+authlib
+httpx
+itsdangerous
 # Also need to indicate installing toolkit as local (-e)

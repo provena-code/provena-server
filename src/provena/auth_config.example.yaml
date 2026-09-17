@@ -1,0 +1,35 @@
+# Copy this file to auth_config.yaml and fill in real values.
+# auth_config.yaml is gitignored (see src/provena/*config.yaml in .gitignore).
+
+# Name of the single auth backend this server uses. Currently only "google"
+# is implemented.
+active_backend: google
+
+# Secret key for signing the short-lived, server-side login session cookie
+# used while a login is in progress (OAuth state, plus the
+# client_redirect_uri/client_type passed to /auth/login). Not used for issued
+# API tokens, which are opaque and stored in the database. Generate a real
+# random value, e.g.:
+#   python -c "import secrets; print(secrets.token_urlsafe(32))"
+session_secret_key: "CHANGE-ME"
+
+# Origins allowed as the `client_redirect_uri` query parameter to /auth/login
+# -- i.e. where the browser is sent (with a token attached) once login
+# completes. Supports an exact "scheme://host:port"/"scheme://host", or a
+# wildcard port via "scheme://host:*".
+redirect_allowlist:
+  - "http://127.0.0.1:*" # VS Code extension's local loopback server
+  - "http://localhost:*"
+  # - "https://your-web-app.example.com"
+
+backends:
+  google:
+    client_id: "CHANGE-ME.apps.googleusercontent.com"
+    client_secret: "CHANGE-ME"
+    # Must exactly match a redirect URI registered for this client in the
+    # Google Cloud Console credentials page.
+    redirect_uri: "http://localhost:8001/auth/google/callback"
+
+token:
+  cli_ttl_days: 90
+  web_ttl_hours: 12
