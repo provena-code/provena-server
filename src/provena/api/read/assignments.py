@@ -3,11 +3,11 @@ from fastapi import APIRouter
 from fastapi.params import Depends
 from pydantic import BaseModel
 from progsnap2.database.reader.sql_reader import SQLReader
-from progsnap2.spec.enums import CoreTables, EventType, MainTableColumns as Cols
+from progsnap2.spec.enums import CoreTables, EventType, MainTableColumns as Cols,  EditType
 from provena.api.read.common import create_reader, require_api_key
 import pandas as pd
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, case, func, select
 
 router = APIRouter(
     prefix="/read",
@@ -26,72 +26,68 @@ def get_assignments(reader: SQLReader = Depends(create_reader)):
 
 class AssignmentSubjectsResponseItem(BaseModel):
     SubjectID: str
-    InsertTextLength: int
-    DeleteTextLength: int
+    LastSubmissionTime: str
+    MaxScore: float
 
 @router.get("/assignments/{assignment_id}/subjects", operation_id="getSubjectStatsForAssignment")
 def get_subject_stats_for_assignment(assignment_id: str, reader: SQLReader = Depends(create_reader)) -> list[AssignmentSubjectsResponseItem]:
     manager = reader.get_table_manager()
     main_table = manager.get_table(CoreTables.MainTable)
+    session = reader.get_session()
 
-    # Find all the Submissions for this AssignmentID
-    # and get who submitted what
-    submitted_files = select(
+    submissions = select(
         main_table.c.SubjectID,
-        main_table.c.CodeStateSection,
-        main_table.c.CodeStateID,
-        func.max(main_table.c.ServerTimestamp).label("LastSubmissionTime")
-    ).where(and_(
-        main_table.c.AssignmentID == assignment_id,
-        main_table.c.EventType == EventType.Submit,
-        main_table.c.SubjectID.isnot(None),
-        main_table.c.CodeStateSection.isnot(None)
-    )).group_by(
-        main_table.c.SubjectID,
-        main_table.c.CodeStateSection
-    ).cte("submitted_files")
+        func.max(main_table.c.ServerTimestamp).label("LastSubmissionTime"),
+        func.max(main_table.c.Score).label("MaxScore")
+    ).where(
+        (main_table.c.AssignmentID == assignment_id) &
+        (main_table.c.EventType == EventType.Submit) &
+        (main_table.c.SubjectID.isnot(None))
+    ).group_by(main_table.c.SubjectID)
 
-    # TODO: Need to identify CodeStateSections for a given CodeStateID
-    # since the CodeStateSection itself is unreliable here (not a full path!)
+    results = session.execute(submissions).fetchall()
+    return results
 
-    select_cols = [
-        Cols.SubjectID,
-        Cols.InsertText,
-        # TODO: Need a different call if using DeleteText
-        Cols.DeleteLength,
-    ]
-    select_cols = [main_table.c[col] for col in select_cols]
+    # This old version attempted to get stats for each submission, but it
+    # turns out this would require a lot of indexing, and I think it's better
+    # to think about this as a chron task that extracts more useful stats more
+    # efficiently.
 
-    # Final all edits made by these subjects in these code state sections
-    # before the submission
-    statement = select(*select_cols).where(
-        and_(
-            main_table.c.EventType == EventType.FileEdit,
-            main_table.c.ServerTimestamp <= submitted_files.c.LastSubmissionTime
-        )
-    ).join(
-        submitted_files,
-        and_(
-            main_table.c.SubjectID == submitted_files.c.SubjectID,
-            main_table.c.CodeStateSection == submitted_files.c.CodeStateSection
-        )
-    )
+    # mapping_table = get_mapping_table(session, manager)
 
-    # statement = select(*select_cols).where(
-    #     (main_table.c[Cols.AssignmentID] == assignment_id) &
-    #     (main_table.c[Cols.EventType] == EventType.FileEdit)
+    # # Find all the Submissions for this AssignmentID
+    # # and get who submitted what
+    # submitted_files = select(
+    #     mapping_table.c.SubjectID,
+    #     mapping_table.c.CodeStateSection,
+    #     mapping_table.c.LastValidTimestamp,
+    # ).where(and_(
+    #     main_table.c.AssignmentID == assignment_id,
+    #     main_table.c.SubjectID.isnot(None),
+    # )).cte("submitted_files")
+
+    # statement = select(
+    #     main_table.c.SubjectID,
+    #     func.sum(case((main_table.c.EditType == str(EditType.Insert), 1), else_=0)).label("Insertions"),
+    #     func.sum(case((main_table.c.EditType == str(EditType.Delete), 1), else_=0)).label("Deletions"),
+    #     func.sum(case((main_table.c.EditType == str(EditType.Replace), 1), else_=0)).label("Replacements")
+    # ).where(
+    #     and_(
+    #         main_table.c.EventType == EventType.FileEdit,
+    #         main_table.c.ServerTimestamp <= submitted_files.c.LastValidTimestamp
+    #     )
+    # ).join(
+    #     submitted_files,
+    #     and_(
+    #         main_table.c.SubjectID == submitted_files.c.SubjectID,
+    #         main_table.c.CodeStateSection == submitted_files.c.CodeStateSection
+    #     )
+    # ).group_by(
+    #     main_table.c.SubjectID
     # )
-    edits = pd.read_sql_query(statement, reader.get_session().connection())
-    print(edits)
-    # Get the sum of inserted and deleted text lengths per subject
-    edits[Cols.InsertText + "Length"] = edits[Cols.InsertText].str.len().fillna(0)
-    edits["DeleteTextLength"] = edits[Cols.DeleteLength]
-    summary = edits.groupby(Cols.SubjectID).agg({
-        Cols.InsertText + "Length": "sum",
-        "DeleteTextLength": "sum"
-    }).reset_index()
-    as_dict = summary.to_dict(orient="records")
-    return [AssignmentSubjectsResponseItem(**item) for item in as_dict]
+
+    # results = session.execute(statement).fetchall()
+    # return [AssignmentSubjectsResponseItem(**dict(row)) for row in results]
 
 @router.get("/assignments/{assignment_id}/{subject_id}/code_state_sections", operation_id="getCodeStateSectionsForAssignmentSubject")
 def get_code_state_sections_for_assignment_subject(
@@ -100,11 +96,19 @@ def get_code_state_sections_for_assignment_subject(
     reader: SQLReader = Depends(create_reader)
 ):
     manager = reader.get_table_manager()
-    main_table = manager.get_table(CoreTables.MainTable)
-    statement = select(main_table.c[Cols.CodeStateSection].distinct()).where(
-        (main_table.c[Cols.AssignmentID] == assignment_id) &
-        (main_table.c[Cols.SubjectID] == subject_id)
+    session = reader.get_session()
+    mapping_table = get_mapping_table(session, manager)
+    statement = select(mapping_table.c[Cols.CodeStateSection].distinct()).where(
+        (mapping_table.c[Cols.AssignmentID] == assignment_id) &
+        (mapping_table.c[Cols.SubjectID] == subject_id)
     )
     results = reader.get_session().execute(statement).fetchall()
     ids = [row[0] for row in results]
     return ids
+
+from provena.api.read.logic.mapping import get_mapping_table, update_mapping_table
+
+@router.post("/update_mapping_table", operation_id="updateMappingTable")
+def update_mapping_table_endpoint(reader: SQLReader = Depends(create_reader)):
+    manager = reader.get_table_manager()
+    get_mapping_table(reader.get_session(), manager)

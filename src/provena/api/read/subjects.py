@@ -22,6 +22,18 @@ def get_subjects(reader: SQLReader = Depends(create_reader)):
     ids = [row[0] for row in results if row[0] is not None]
     return ids
 
+
+@router.get("/subjects/{subject_id}/time_range", operation_id="getClientTimestampRangeForSubject")
+def get_client_timestamp_range_for_subject(subject_id: str, reader: SQLReader = Depends(create_reader)):
+    manager = reader.get_table_manager()
+    main_table = manager.get_table(CoreTables.MainTable)
+    statement = select(func.min(main_table.c[Cols.ClientTimestamp]), func.max(main_table.c[Cols.ClientTimestamp])).where(main_table.c[Cols.SubjectID] == subject_id)
+    result = reader.get_session().execute(statement).fetchone()
+    return {
+        "MinClientTimestamp": result[0],
+        "MaxClientTimestamp": result[1],
+    }
+
 @router.get("/subjects/{subject_id}/codestate_sections", operation_id="getCodeStateSectionsForSubject")
 def get_codestates_for_subject(subject_id: str, reader: SQLReader = Depends(create_reader)):
     manager = reader.get_table_manager()

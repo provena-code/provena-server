@@ -1,0 +1,7 @@
+# TODO: This isn't used yet, just a note for now
+mysqlclient
+fastapi
+uvicorn
+sqlalchemy
+jinja2
+# Also need to indicate installing toolkit as local (-e)

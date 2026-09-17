@@ -10,7 +10,7 @@ enum_types:
       - name: Git
         description: CodeStates will be stored in Git repositories, with commit hashes used as CodeStateIDs, organized by SubjectID and ProjectID.
       - name: Keystroke
-        description: Rather than directly storing Codestates, the MainTable will contain InsertedText and DeletedText columns tracking keystroke-level insertions and deletions, from which CodeStates can be reconstructed.
+        description: Rather than directly storing Codestates, the MainTable will contain InsertText and DeleteText/DeleteLength columns tracking keystroke-level insertions and deletions, from which CodeStates can be reconstructed.
 
   - name: EventInitiator
     values:
@@ -699,3 +699,32 @@ link_tables:
           The original content sent to the logging server.
     description: |
       A link table that records loggin error details.
+  - name: LinkAssignmentMap
+    id_column_names:
+      - SubjectID
+      - AssignmentID
+    additional_columns:
+      - name: CodeStateSection
+        requirement: Required
+        datatype: SourceLocation
+        description: |
+          CodeStateSection that maps to the given AssignmentID
+      - name: LastValidTimestamp
+        requirement: Required
+        datatype: Timestamp
+        description: |
+          The last Timestamp for which this mapping is valid.
+          Edits to a file after its submission should not be
+          considered relevant to that assignment.
+          Note that this is a ServerTimestamp and it cannot be
+          used directly to associate logs with submissions.
+      - name: CodeStateID
+        requirement: Required
+        datatype: ID
+        description: |
+          The CodeStateID of the last submission of this file.
+          Used to identify a likely code submission.
+    description: |
+      A link table that maps CodeStateSections
+    unique_constraints:
+      - [SubjectID, AssignmentID, CodeStateSection]

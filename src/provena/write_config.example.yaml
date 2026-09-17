@@ -15,6 +15,9 @@ database_config:
   - SessionID
   # Used for subission checking (hash of code)
   - CodeStateID
+  # Useful for browsing data
+  - ServerTimestamp
+  - ClientTimestamp
 
   metadata:
     Version: "1.0"
@@ -25,3 +28,6 @@ database_config:
     ProgramInputLinkTable: ""
 
 add_server_timestamps: true
+
+# Add API Keys here for testing purposes. Do not use in production.
+testing_api_keys: []

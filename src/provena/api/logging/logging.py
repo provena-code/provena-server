@@ -37,9 +37,9 @@ with db_writer_factory.create_writer() as writer:
     # Create the tables in the database
     try:
         writer.initialize_database()
+        # writer.update_database()
     except Exception as e:
         logger.error(f"Error initializing database: {e}")
-    # writer.update_database()
 
 # For use in Depends
 def create_writer():
@@ -79,7 +79,6 @@ def add_codestate_ids(events: List[dict]) -> None:
     for event in events:
         if Cols.Code in event:
             code  = get_canonical_string(event[Cols.Code])
-            event[Cols.Code] = code
             event[Cols.CodeStateID] = generate_code_hash(code, False)
 
 @router.post("/events", operation_id="addEvents", response_model=LogResult)

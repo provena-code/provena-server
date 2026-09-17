@@ -16,6 +16,11 @@ from provena.api.logging.logging import add_error_event, add_malformatted_events
 from provena.configs import api_config
 import provena.api
 
+# Set python's logging level to uvicorns if uvicorn is being used
+if "uvicorn" in logging.Logger.manager.loggerDict:
+    uvicorn_logger = logging.getLogger("uvicorn")
+    logging.basicConfig(level=uvicorn_logger.level)
+
 app = FastAPI()
 
 cors_config = api_config.cors_config
