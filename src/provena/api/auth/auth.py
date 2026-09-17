@@ -12,7 +12,7 @@ from provena.auth.backends.registry import get_active_backend, get_backend
 from provena.auth.db import Base, engine
 from provena.auth.dependencies import get_auth_db, get_current_token
 from provena.auth.models import OAuthIdentity, Token, User
-from provena.auth.redirects import append_token_to_redirect, is_allowed_redirect_uri
+from provena.auth.redirects import append_query_params, is_allowed_redirect_uri
 from provena.auth.tokens import issue_token, revoke_token
 from provena.configs import auth_config
 
@@ -90,8 +90,16 @@ async def google_callback(request: Request, db: Session = Depends(get_auth_db)):
         ))
     db.commit()
 
-    raw_token = issue_token(db, user, client_type)
-    return RedirectResponse(append_token_to_redirect(client_redirect_uri, raw_token))
+    raw_token, token = issue_token(db, user, client_type)
+    params = {
+        "token": raw_token,
+        "email": user.email,
+        # Naive UTC (see provena.auth.tokens), so make that explicit for clients.
+        "expires_at": token.expires_at.isoformat() + "Z",
+    }
+    if user.display_name:
+        params["name"] = user.display_name
+    return RedirectResponse(append_query_params(client_redirect_uri, params))
 
 
 @router.post("/logout", operation_id="authLogout")

@@ -1,7 +1,7 @@
 import datetime as dt
 import hashlib
 import secrets
-from typing import Optional
+from typing import Optional, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -29,24 +29,25 @@ def _ttl_for(client_type: str) -> dt.timedelta:
     return dt.timedelta(hours=auth_config.token.web_ttl_hours)
 
 
-def issue_token(db: Session, user: User, client_type: str) -> str:
+def issue_token(db: Session, user: User, client_type: str) -> Tuple[str, Token]:
     """
     Creates and persists a new token for `user`, returning the raw (unhashed)
-    value. This is the only point at which the raw value is available; only
-    its hash is stored.
+    value alongside the Token row (e.g. for its expires_at). The raw value is
+    only ever available here; only its hash is stored.
     """
     raw_token = secrets.token_urlsafe(32)
     now = _utcnow()
-    db.add(Token(
+    token = Token(
         user_id=user.id,
         token_hash=_hash_token(raw_token),
         client_type=client_type,
         created_at=now,
         last_used_at=now,
         expires_at=now + _ttl_for(client_type),
-    ))
+    )
+    db.add(token)
     db.commit()
-    return raw_token
+    return raw_token, token
 
 
 def resolve_token(db: Session, raw_token: str) -> Optional[Token]:

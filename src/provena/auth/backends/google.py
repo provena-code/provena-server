@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 from authlib.integrations.starlette_client import OAuth
 from fastapi import HTTPException, Request, status
 from starlette.responses import Response
@@ -25,6 +28,15 @@ class GoogleOAuthBackend(AuthBackend):
         try:
             token = await self._oauth.google.authorize_access_token(request)
         except Exception as e:
+            # Authlib's own message (e.g. "mismatching_state") is often too
+            # terse to diagnose remotely -- log what we actually received so
+            # a lost/wrong-origin session cookie is easy to distinguish from
+            # a genuinely stale/reused login link.
+            logger.error(
+                f"Google OAuth callback failed: {e}\n"
+                f"Callback query params: {dict(request.query_params)}\n"
+                f"Session at time of callback: {dict(request.session)}"
+            )
             raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Google login failed: {e}")
 
         user_info = token.get("userinfo")

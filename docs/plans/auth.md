@@ -91,8 +91,13 @@ Clients never see backend-specific routes. The generic surface:
    fetches the user's profile.
 3. Server looks up or creates a local `User` + linked `OAuthIdentity` record,
    issues its own opaque DB-backed token, and redirects the browser to the
-   `client_redirect_uri` from step 1 with the token attached (query param or
-   fragment).
+   `client_redirect_uri` from step 1 with the token and a few other values
+   attached as query params: `token`, `email` (also the intended `SubjectID`
+   for logging), `expires_at` (ISO 8601, naive UTC with an explicit `Z`
+   suffix), and `name` if Google returned a display name. Kept intentionally
+   small -- a client that later needs fresher/other profile info should call
+   a `/auth/me`-style endpoint (not yet built) rather than trust a
+   login-time snapshot indefinitely.
 4. Client stores that token and sends it on future requests (likely
    `Authorization: Bearer <token>`), replacing/extending today's placeholder
    `X-API-Key` check in `src/provena/api/read/common.py`.

@@ -1,4 +1,4 @@
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 """
 Validates and rewrites the client-supplied `client_redirect_uri` used to send
@@ -38,7 +38,7 @@ def is_allowed_redirect_uri(uri: str, allowlist: list[str]) -> bool:
     return False
 
 
-def append_token_to_redirect(uri: str, raw_token: str) -> str:
+def append_query_params(uri: str, params: dict) -> str:
     scheme, netloc, path, query, fragment = urlsplit(uri)
-    query = f"{query}&token={raw_token}" if query else f"token={raw_token}"
-    return urlunsplit((scheme, netloc, path, query, fragment))
+    all_params = parse_qsl(query, keep_blank_values=True) + list(params.items())
+    return urlunsplit((scheme, netloc, path, urlencode(all_params), fragment))
