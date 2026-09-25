@@ -50,3 +50,20 @@ Three separate Console settings are easy to conflate:
   * The real public callback URL for production (depends on whatever reverse proxy/domain fronts the deployed server). No wildcards -- Google requires an exact match per entry.
 * **Authorized JavaScript origins**: leave empty. This is only for client-side Google Identity Services JS (e.g. a "Sign in with Google" button rendered directly in browser JS), which this server doesn't use -- the whole OAuth exchange happens server-side via Authlib.
 * **Authorized domains** (a different page: the OAuth *consent screen*, not the Client ID's redirect URIs): governs your app's consent-screen identity (homepage/privacy-policy links), not the redirect URI list, and doesn't accept `localhost`/IP entries -- Google separately exempts `localhost`/`127.0.0.1` redirect URIs from domain verification regardless of this list. For a small, single-class deployment, staying in "Testing" publishing status with specific test users added by email likely avoids needing full domain verification at all. Confirm the exact current requirements live in the Console, since Google's consent-screen policies shift over time.
+
+## Citing Provena
+
+To cite Provena, please cite:
+
+Price, T.W., Titus, K., Jiao, S. & and Tran, K. (2026, November). "Beyond Copy-Paste: Detecting and Understanding Students’ Use of Unauthorized Aid when Monitored." In Proceedings of the 26th Koli Calling International Conference on Computing Education Research (pp. 1-12).
+
+
+```
+@inproceedings{price2026beyond,
+  title={Beyond Copy-Paste: Detecting and Understanding Students’ Use of Unauthorized Aid when Monitored},
+  author={Price, Thomas W. and Titus, Kim and Jiao, Shuyin and Tran, Keith},
+  booktitle={Proceedings of the 26th Koli Calling International Conference on Computing Education Research},
+  pages={1--12},
+  year={2026}
+}
+```
