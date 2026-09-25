@@ -5,13 +5,13 @@
 This is a FastAPI that records and serves data collected from a vscode extension for the purposes of helping to verify student programming work and collect research data.
 
 It builds on two submodules:
-* [provena-core](https://github.com/thomaswp/provena-core) (`provena` folder): contains the core typescript logic for building a provenance history from the logs, annotating each character with its original source.
+* [provena-core](https://github.com/provena-code/provena-core) (`provena` folder): contains the core typescript logic for building a provenance history from the logs, annotating each character with its original source.
 * * **Note**: This is not yet used directly. Currently the clients are responsible for building provenance histories. It may be used in the future.
 * [ProgSnapToolkit](https://github.com/CSSPLICE/ProgSnapToolkit) (`toolbox` folder): contains the logic for logging data in the ProgSnap2 format (only write logic). It relies on a .yaml file to define the format and uses that to structure the database.
 
 It also connects with two other client repos:
-* [provena-vscode](https://github.com/thomaswp/provena-vscode): A vs-code client that writes a student's history to the server.
-* [provena-client](https://github.com/thomaswp/provena-client): A web client for the instructor interface that can read data from the server to show student histories.
+* [provena-vscode](https://github.com/provena-code/provena-vscode): A vs-code client that writes a student's history to the server.
+* [provena-client](https://github.com/provena-code/provena-client): A web client for the instructor interface that can read data from the server to show student histories.
 
 ## Structure
 

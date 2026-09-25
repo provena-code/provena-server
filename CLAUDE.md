@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ProvenaServer is a FastAPI app that records and serves programming-activity log data collected by a VS Code extension, for verifying student work and collecting research data. It's built on two git submodules:
 
-* `provena/` — [provena-core](https://github.com/thomaswp/provena-core), TypeScript logic for building provenance history from logs (annotating each character with its original source). Not currently called by the server directly — clients build their own provenance histories for now — but `src/provena/bridge/node_bridge.py` can shell out to its compiled `provena/dist/App.js` via Node subprocesses.
+* `provena/` — [provena-core](https://github.com/provena-code/provena-core), TypeScript logic for building provenance history from logs (annotating each character with its original source). Not currently called by the server directly — clients build their own provenance histories for now — but `src/provena/bridge/node_bridge.py` can shell out to its compiled `provena/dist/App.js` via Node subprocesses.
 * `toolbox/` — [ProgSnapToolkit](https://github.com/CSSPLICE/ProgSnapToolbox), which provides the ProgSnap2 data model, spec-driven table generation, and the SQL read/write layer. It's a separately installable Python package (`progsnap2`) that this server depends on.
 
 It also connects to two sibling client repos (not in this repo): `provena-vscode` (writes student history to the server) and `provena-client` (instructor-facing web UI that reads from the server).
