@@ -68,13 +68,16 @@ chance to set a pattern for future non-logging tables.
 
 Clients never see backend-specific routes. The generic surface:
 
-* `GET /auth/login?client_redirect_uri=<uri>` — starts a login using whichever
-  backend is configured as active. If that backend is OAuth-based, the server
-  redirects the browser to the provider (Google); if it's a non-OAuth backend
-  like whitelist, this would instead need to serve/accept a simple form (not
-  built yet — deferred, per the web app not needing provider UI today).
-  `client_redirect_uri` says where to send the browser once login completes —
-  see "Redirecting back to the client" below.
+* `GET /auth/login?client_redirect_uri=<uri>&client_type=cli|web&state=<opaque>`
+  — starts a login using whichever backend is configured as active. If that
+  backend is OAuth-based, the server redirects the browser to the provider
+  (Google); if it's a non-OAuth backend like whitelist, this would instead
+  need to serve/accept a simple form (not built yet — deferred, per the web
+  app not needing provider UI today). `client_redirect_uri` says where to
+  send the browser once login completes — see "Redirecting back to the
+  client" below. `state` is optional, opaque to the server, and returned
+  unchanged on that same final redirect — see "Client-side CSRF (`state`)"
+  below.
 * Provider callback (`/auth/google/callback`, etc.) — internal, backend-
   specific, registered with the provider itself (e.g. in the Google Cloud
   Console). Clients never hit this directly.
@@ -101,6 +104,24 @@ Clients never see backend-specific routes. The generic surface:
 4. Client stores that token and sends it on future requests (likely
    `Authorization: Bearer <token>`), replacing/extending today's placeholder
    `X-API-Key` check in `src/provena/api/read/common.py`.
+
+## Client-side CSRF (`state`)
+
+There are two independent "state" concerns in this flow, easy to conflate:
+
+* **Server ↔ Google**: already fully handled by Authlib internally (its own
+  session-stored nonce, checked in `authorize_access_token`). Invisible to
+  clients.
+* **Server ↔ client**: not handled by anything above -- without it, a stray
+  or spoofed request landing on the client's own callback (the VS Code
+  loopback server, or the web app's callback route) could be accepted as if
+  it were a real login completion. This is the client's own responsibility:
+  generate a random `state` value before starting the flow, pass it as
+  `/auth/login?...&state=<value>`, remember it, and verify the `state` that
+  comes back on the final redirect matches before trusting the accompanying
+  `token`. The server treats this value as opaque -- it's carried through the
+  login session (alongside `client_redirect_uri`/`client_type`) and returned
+  unchanged; the server does not generate, interpret, or validate it itself.
 
 ### Redirecting back to the client
 
@@ -248,8 +269,10 @@ Built (server side):
   `401 {"detail": "reauth_required"}` on anything invalid/missing/expired.
 * `src/provena/api/auth/auth.py` — the actual endpoints, auto-registered by
   `main.py`'s router discovery:
-  * `GET /auth/login?client_redirect_uri=<uri>&client_type=cli|web` (default
-    `web`)
+  * `GET /auth/login?client_redirect_uri=<uri>&client_type=cli|web&state=<opaque>`
+    (`client_type` defaults to `web`; `state` is optional and is the client's
+    own CSRF nonce, not the server's -- see "Client-side CSRF (`state`)"
+    above)
   * `GET /auth/google/callback` (internal, provider-registered, hidden from
     the OpenAPI schema)
   * `POST /auth/logout` (requires a valid bearer token; revokes only that

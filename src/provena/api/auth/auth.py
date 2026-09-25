@@ -1,7 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
 
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -39,7 +39,12 @@ def _require_allowed_redirect_uri(uri: str) -> None:
 
 
 @router.get("/login", operation_id="authLogin")
-async def login(request: Request, client_redirect_uri: str, client_type: Literal["cli", "web"] = "web"):
+async def login(
+    request: Request,
+    client_redirect_uri: str,
+    client_type: Literal["cli", "web"] = "web",
+    state: Optional[str] = None,
+):
     """
     Starts a login using whichever backend is configured as active for this
     server. Neither client needs to know which backend that is.
@@ -48,10 +53,22 @@ async def login(request: Request, client_redirect_uri: str, client_type: Literal
     attached) once login completes -- the VS Code extension's local loopback
     server, or the web app's own callback route. It must match an entry in
     auth_config.yaml's redirect_allowlist.
+
+    `state`, if given, is treated as an opaque value and returned unchanged as
+    a `state` query param on that same final redirect. This is the client's
+    own CSRF defense, not the server's: a client should generate a random
+    value here, remember it (e.g. in memory before opening the browser), and
+    verify the returned `state` matches before trusting the returned token --
+    otherwise a stray or spoofed request landing on the client's callback
+    (loopback server / callback route) could be accepted as a real login.
+    This is separate from, and in addition to, the OAuth CSRF state Authlib
+    already manages between this server and Google.
     """
     _require_allowed_redirect_uri(client_redirect_uri)
     request.session["client_redirect_uri"] = client_redirect_uri
     request.session["client_type"] = client_type
+    if state is not None:
+        request.session["client_state"] = state
 
     backend = get_active_backend()
     callback_url = _CALLBACK_URLS[backend.name]()
@@ -64,6 +81,7 @@ async def google_callback(request: Request, db: Session = Depends(get_auth_db)):
 
     client_redirect_uri = request.session.pop("client_redirect_uri", None)
     client_type = request.session.pop("client_type", "web")
+    client_state = request.session.pop("client_state", None)
     if not client_redirect_uri:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Login session expired or was not started via /auth/login.")
 
@@ -99,6 +117,8 @@ async def google_callback(request: Request, db: Session = Depends(get_auth_db)):
     }
     if user.display_name:
         params["name"] = user.display_name
+    if client_state is not None:
+        params["state"] = client_state
     return RedirectResponse(append_query_params(client_redirect_uri, params))
 
 
