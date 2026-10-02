@@ -4,6 +4,7 @@ from MySQLdb import OperationalError
 logger = logging.getLogger(__name__)
 
 import importlib
+import os
 import pkgutil
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
@@ -11,9 +12,10 @@ from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.sessions import SessionMiddleware
 
 from provena.api.logging.logging import add_error_event, add_malformatted_events
-from provena.configs import api_config
+from provena.configs import api_config, auth_config
 import provena.api
 
 # Set python's logging level to uvicorns if uvicorn is being used
@@ -31,6 +33,24 @@ app.add_middleware(
     allow_credentials=cors_config.allow_credentials,
     allow_methods=cors_config.allow_methods,
     allow_headers=cors_config.allow_headers,
+)
+
+# Backs the short-lived server-side login session (OAuth state, and the
+# client_redirect_uri/client_type passed to /auth/login) -- see
+# provena.api.auth.auth. Not used for issued API tokens, which are opaque and
+# DB-backed.
+#
+# Secure (HTTPS-only) by default. Local HTTP dev needs an explicit opt-out
+# rather than a config file setting, since it's about the environment you're
+# running in, not a deployment choice someone should accidentally leave on --
+# see PROVENA_ALLOW_INSECURE_COOKIES in run_api.bat.
+_allow_insecure_cookies = os.environ.get("PROVENA_ALLOW_INSECURE_COOKIES", "").lower() in ("1", "true", "yes")
+if _allow_insecure_cookies:
+    logger.warning("PROVENA_ALLOW_INSECURE_COOKIES is set -- the login session cookie will be sent over plain HTTP. Do not set this in production.")
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=auth_config.session_secret_key,
+    https_only=not _allow_insecure_cookies,
 )
 
 for module_info in pkgutil.walk_packages(provena.api.__path__, provena.api.__name__ + "."):

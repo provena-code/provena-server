@@ -16,6 +16,8 @@ from progsnap2.database.writer.db_writer_factory import IOFactory, SQLIOFactory
 from progsnap2.spec.spec_definition import PS2Versions, ProgSnap2Spec
 from progsnap2.spec.gen.gen_client import generate_ts_methods
 
+from provena.auth.config import AuthConfig
+
 __file_dir = os.path.dirname(os.path.abspath(__file__))
 __src_dir = os.path.join(__file_dir, "..")
 
@@ -28,3 +30,4 @@ SubmitEvent = data_model_gen.main_event_additional_columns.get("Submit")
 
 api_config = PS2APIConfig.from_yaml(os.path.join(__src_dir, "provena/write_config.yaml"), spec)
 read_config = PS2DataConfig.from_yaml(os.path.join(__src_dir, "provena/read_config.yaml"), spec)
+auth_config = AuthConfig.from_yaml(os.path.join(__src_dir, "provena/auth_config.yaml"))

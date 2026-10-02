@@ -3,14 +3,14 @@ from fastapi.params import Depends
 from pydantic import BaseModel
 from progsnap2.database.reader.sql_reader import SQLReader
 from progsnap2.spec.enums import CoreTables, EventType, MainTableColumns as Cols
-from provena.api.read.common import create_reader, require_api_key
+from provena.api.read.common import create_reader, require_instructor_role
 import pandas as pd
 
 from sqlalchemy import and_, func, select
 
 router = APIRouter(
     prefix="/read",
-    dependencies=[Depends(require_api_key)],
+    dependencies=[Depends(require_instructor_role)],
 )
 
 @router.get("/subjects", operation_id="getSubjectIDs")

@@ -23,6 +23,7 @@ from progsnap2.spec.gen.gen_client import generate_ts_methods
 from progsnap2.spec.enums import MainTableColumns as Cols, EventType
 
 from provena.configs import api_config, spec, MainTableEvent
+from provena.auth.roles import require_student_role, require_submit_permission
 
 db_writer_factory: SQLIOFactory = IOFactory.create_factory(api_config.database_config, ps2_spec=spec)
 
@@ -81,7 +82,7 @@ def add_codestate_ids(events: List[dict]) -> None:
             code  = get_canonical_string(event[Cols.Code])
             event[Cols.CodeStateID] = generate_code_hash(code, False)
 
-@router.post("/events", operation_id="addEvents", response_model=LogResult)
+@router.post("/events", operation_id="addEvents", response_model=LogResult, dependencies=[Depends(require_student_role)])
 def add_events_with_code_states(events: List[MainTableEvent], writer: SQLWriter = Depends(create_writer)): # type: ignore
     """
     Add events and code states to the database at the same time to ensure consistency.
@@ -215,10 +216,13 @@ class SubmitEvent(SubmissionInfo):
     TermID: Optional[str]
     CourseID: Optional[str]
 
-@router.post("/submit", operation_id="submit", response_model=LogResult)
+@router.post("/submit", operation_id="submit", response_model=LogResult, dependencies=[Depends(require_submit_permission)])
 def log_submit(event: SubmitEvent, writer: SQLWriter = Depends(create_writer)): # type: ignore
     """
     Submit an event to the database.
+
+    Expected to be called by the autograder, not the student's own session --
+    see require_submit_permission.
     """
     base_event = event.model_dump(exclude_none=True)
     base_event["EventType"] = "Submit"
@@ -264,9 +268,9 @@ def log_submit(event: SubmitEvent, writer: SQLWriter = Depends(create_writer)): 
     add_codestate_ids(events)
     return writer.add_events(events)
 
-# TODO: This should be a get, but I'll update later to no break
+# TODO: This should be a get, but I'll update later to not break
 # things, since it doesn't really matter...
-@router.post("/get_event_count", operation_id="getEventCount")
+@router.post("/get_event_count", operation_id="getEventCount", dependencies=[Depends(require_student_role)])
 def get_event_count(info: SubmissionInfo, writer: SQLWriter = Depends(create_writer)): # type: ignore
     manager = writer.context.table_manager
     main_table = manager.get_table(CoreTables.MainTable)
