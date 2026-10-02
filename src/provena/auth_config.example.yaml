@@ -33,3 +33,34 @@ backends:
 token:
   cli_ttl_days: 90
   web_ttl_hours: 12
+
+# Roles: which logged-in users (by email) count as a student/instructor, plus
+# which API keys count as that role. Two fixed roles -- students can write
+# (/events, /get_event_count, /submit), instructors can do everything a
+# student can PLUS read (/read/*). No blacklist mechanism.
+#
+# `type` is one of:
+#   whitelist -- only the exact emails listed in `emails`.
+#   pattern   -- any email matching the glob-style `pattern` (e.g. "*@ncsu.edu").
+#   open      -- anyone qualifies, and no credential at all (API key or login)
+#               is required. Allowed for instructor, but logs a startup
+#               warning given the stakes of leaving student data readable
+#               with no gate at all.
+roles:
+  instructor:
+    type: whitelist
+    emails:
+      - "CHANGE-ME@example.edu"
+    # Full instructor privilege (also satisfies the student role, and
+    # /submit). Keep these private -- instructor/dev use, testing, admin
+    # scripts, not meant to be embedded anywhere less secure.
+    api_keys: []
+
+  student:
+    type: pattern
+    pattern: "*@example.edu"
+    # Grants ONLY /submit permission, nothing else -- not general student
+    # access (there is no general-purpose student API key; a plain student
+    # identity is always proven via OAuth login). Meant for the autograder,
+    # which is less trusted than an instructor's own machine.
+    submit_api_keys: []

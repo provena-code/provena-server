@@ -3,14 +3,14 @@ from fastapi import  APIRouter, Depends, Query
 from progsnap2.database.reader.sql_reader import SQLReader
 from progsnap2.spec.enums import CoreTables, MainTableColumns as Cols, EventType
 
-from provena.api.read.common import create_reader, require_api_key
+from provena.api.read.common import create_reader, require_instructor_role
 from provena.bridge.node_bridge import process_edits
 
 from sqlalchemy import Table, and_, func, select
 
 router = APIRouter(
     prefix="/read",
-    dependencies=[Depends(require_api_key)],
+    dependencies=[Depends(require_instructor_role)],
 )
 
 @router.get("/edits_in_range", operation_id="getEditsInRange")

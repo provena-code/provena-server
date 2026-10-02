@@ -1,7 +1,9 @@
 # Auth: design notes
 
-Status: server-side Google OAuth + token issuance implemented. See
-"Implementation status" at the bottom for what exists vs. what's still open.
+Status: server-side Google OAuth + token issuance implemented, plus
+role-based authorization (`require_instructor_role`/`require_student_role`/
+`require_submit_permission`). See "Implementation status" at the bottom for
+what exists vs. what's still open.
 
 ## Goal
 
@@ -163,15 +165,139 @@ open question — see below.
 
 ## Scope of this effort
 
-This effort is **authentication only**: getting a user logged in with a
+The first pass was **authentication only**: getting a user logged in with a
 verified identity (User/OAuthIdentity/Token tables + a Google OAuth backend,
 plus the whitelist-as-alternative-login-method backend below). Authorization —
-roles, permissions, what an authenticated user is allowed to do (e.g.
-instructor access to `read/` endpoints, mapping a user to `CourseID`s they
-manage) — is explicitly out of scope for now and will be designed/built as a
-separate follow-up once login itself works. The `User` model should be
-designed so a role/permissions concept can be added later without reshaping
-it, but we're not building that layer yet.
+roles, permissions, what an authenticated user is allowed to do — is the
+subject of the "Roles & permissions" section below, now in progress as a
+follow-up on top of the authentication layer above.
+
+## Roles & permissions (authorization)
+
+Status: design in progress, pending a few confirmations (see "Open questions"
+at the end of this section) before implementation.
+
+### Roles are fixed in code, not a configurable set
+
+Two roles, matching the instructor's actual need -- not a general per-endpoint
+permission matrix, which was considered and deliberately dropped as
+unnecessary complexity:
+
+* `student`: may write (`/events`, `/get_event_count`, `/submit`).
+* `instructor`: may read (`/read/*`) *and* write -- i.e. everything a student
+  can do, plus instructor-only endpoints. So `require_student_role` (below)
+  passes for a qualifying instructor too, not just a qualifying student.
+
+### Role membership is configurable, per role, in `auth_config.yaml`
+
+Each role is independently configured as exactly one of:
+
+* `whitelist` -- an exact list of allowed emails (e.g. specific
+  instructors/TAs).
+* `pattern` -- a glob-style pattern matched against the user's email, e.g.
+  `*@ncsu.edu` for "any address at this school can write" (matched
+  case-insensitively via Python's `fnmatch`).
+* `open` -- no restriction at all. Any authenticated user qualifies, *and* (to
+  satisfy "if student roles are set to any then it should be ok to not
+  provide a token") no credential at all -- no API key, no login -- is
+  required either. This is allowed on the `instructor` role too, but a
+  startup warning is logged given the stakes of leaving all student data
+  readable with zero gatekeeping.
+* No blacklist mechanism -- not needed, per the instructor's explicit call.
+
+Draft shape:
+
+```yaml
+roles:
+  instructor:
+    type: whitelist
+    emails: ["prof@ncsu.edu", "ta@ncsu.edu"]
+    api_keys: ["instructor-key-for-some-admin-script"]
+  student:
+    type: pattern
+    pattern: "*@ncsu.edu"
+    api_keys: ["autograder-key"]
+```
+
+### API keys: two kinds, by privilege, not by role
+
+Confirmed: students never use API keys themselves (that's only ever an
+instructor exercising something, e.g. for testing); the only real external
+service caller is the autograder. So the split is by *privilege level*, not
+by role:
+
+* `roles.instructor.api_keys` -- full instructor privilege (and, since
+  instructor ⊇ student, these also satisfy `require_student_role` and
+  `require_submit_permission`). Meant to stay private -- instructor/dev use,
+  testing, admin scripts.
+* `roles.student.submit_api_keys` -- a narrow, separate credential that
+  satisfies *only* `require_submit_permission` (the `/submit` gate below),
+  nothing else. Deliberately scoped down since this is the one meant to live
+  inside autograder code, which is less trusted/secure than an instructor's
+  own machine.
+
+There is no general-purpose "student role" API key -- a plain student
+identity is always proven via OAuth login, never a key.
+
+This replaces today's single, repo-wide `testing_api_keys` (on
+`PS2APIConfig`, read from `write_config.yaml`), which this server's code
+stops reading (the field itself is part of the `toolbox` submodule and isn't
+touched).
+
+### `require_instructor_role` / `require_student_role`
+
+Replaces today's placeholder `require_api_key` in
+`src/provena/api/read/common.py`. Passes if, in order:
+
+1. The role is configured as `open` (short-circuits everything else -- no
+   credential required at all), or
+2. A valid `roles.instructor.api_keys` key is presented (`X-API-Key` header)
+   -- always sufficient, for either dependency, or
+3. A valid bearer token resolves to a `User` whose email satisfies the
+   instructor role's whitelist/pattern -- also always sufficient for either
+   dependency, or
+4. *(`require_student_role` only)* the student role is `open`, or a valid
+   bearer token's email satisfies the student role's whitelist/pattern.
+
+Failure modes, kept deliberately distinct: `401 {"detail": "reauth_required"}`
+when there's no valid credential presented at all (consistent with the
+existing token-expiry signal, so a client knows to trigger `/auth/login`);
+`403` when there *is* a valid identity but it doesn't satisfy the role (e.g. a
+logged-in student hitting an instructor-only endpoint) -- a client shouldn't
+loop into a pointless re-login for this one.
+
+### `require_submit_permission` (`/submit` only)
+
+Confirmed: `/get_event_count` is gated like `/events` (plain
+`require_student_role` -- the student's own VS Code session may call it
+directly). Only `/submit` gets the stricter gate, since it's invoked by the
+autograder, not the student's own session -- there's no user sitting at a
+browser to complete a login for that request, and a plain student OAuth token
+doesn't vouch for the autograder's legitimacy. `require_submit_permission`
+passes if, in order:
+
+1. The student role is `open` (no credential required at all -- the
+   instructor doesn't care), or
+2. An instructor-level credential is presented (instructor API key, or an
+   OAuth login matching the instructor role) -- instructors can always do
+   everything, or
+3. A valid `roles.student.submit_api_keys` key is presented.
+
+A plain student-matching OAuth token alone is **not** accepted here, by
+design. If the student role is not `open` and `submit_api_keys` is empty,
+`/submit` becomes effectively uncallable by anything but an instructor
+credential -- log a startup warning in that case rather than failing silently
+at request time.
+
+### Non-goals
+
+Role checks gate *whether a request is allowed at all*; they don't verify
+that the authenticated identity matches the `SubjectID` claimed inside the
+request body, which remains self-reported by the client as it is today (e.g.
+nothing stops an authenticated student from posting events tagged with a
+different student's `SubjectID`). Enforcing "this token's email must match
+the `SubjectID` of the events it's posting" is a plausible future tightening,
+not part of this pass.
 
 ## Whitelist: two distinct mechanisms
 
@@ -184,9 +310,8 @@ pieces in the modular design:
    against an allowed list and, if present, treated the same as a verified
    OAuth identity for the purposes of issuing a token.
 2. **Whitelist as authorization** (restricting what an OAuth-authenticated
-   user can do, e.g. instructor access) — this is part of the out-of-scope
-   authorization/roles layer above, not built now, but the plan should avoid
-   modeling authentication in a way that would make adding it later awkward.
+   user can do, e.g. instructor access) — this is now the `whitelist` role
+   type in "Roles & permissions" below, not a separate mechanism.
 
 ## Config: `auth_config.yaml`
 
@@ -283,31 +408,58 @@ Built (server side):
   `auth_config.session_secret_key`), which backs both Authlib's own OAuth
   state/CSRF handling and our own stashing of `client_redirect_uri`/
   `client_type` across the redirect to Google and back.
-* Verified with a standalone script exercising the models/tokens/redirects
-  logic against a throwaway SQLite DB (not committed) — issuance, resolution,
-  sliding expiry, hard expiry, revocation, redirect allowlist matching, and
-  `AuthConfig.from_yaml` against the example file all pass. Full end-to-end
-  exercise of the FastAPI endpoints (`TestClient`, real Google exchange)
-  wasn't possible in this pass since the local dev `write_config.yaml`/
-  `read_config.yaml` point at a MySQL instance that isn't running in this
-  environment — that's a pre-existing local-environment gap unrelated to this
-  change, not something introduced by it.
+* `src/provena/auth/config.py` — `RoleConfig`/`InstructorRoleConfig`/
+  `StudentRoleConfig`/`RolesConfig` pydantic models for `auth_config.yaml`'s
+  `roles` section (now a required field). Validates `whitelist` requires a
+  non-empty `emails` list and `pattern` requires a `pattern` string; logs a
+  startup warning if `roles.instructor.type` is `open`, and another if
+  `roles.student.submit_api_keys` is empty while `roles.student.type` isn't
+  `open` (meaning `/submit` would be uncallable by the autograder).
+* `src/provena/auth/roles.py` — `matches_role` (whitelist/pattern/open
+  matching, case-insensitive) plus the three dependencies:
+  `require_instructor_role`, `require_student_role` (instructor is a
+  superset, so an instructor credential satisfies this too), and
+  `require_submit_permission` (used only on `/submit`; deliberately does
+  *not* accept a plain student OAuth login -- only an instructor credential,
+  `roles.student.submit_api_keys`, or the student role being `open`). `401
+  {"detail": "reauth_required"}` when no valid credential is presented at
+  all; `403 {"detail": "insufficient_role"}` when there's a valid identity
+  that just doesn't have the role.
+* Wired in: `src/provena/api/read/common.py`'s old placeholder
+  `require_api_key`/`X-API-Key`-only check is gone, replaced by
+  `require_instructor_role` (imported from `provena.auth.roles`); all four
+  `read/*.py` routers updated to match. `src/provena/api/logging/logging.py`:
+  `/events` and `/get_event_count` now take `dependencies=[Depends(require_student_role)]`,
+  `/submit` takes `dependencies=[Depends(require_submit_permission)]`.
+* `src/provena/auth_config.example.yaml` and the local dev `auth_config.yaml`
+  both updated with a `roles` section. The old `testing_api_keys` field on
+  `write_config.yaml`/`PS2APIConfig` (part of the `toolbox` submodule) is no
+  longer read anywhere in `provena`; it's harmless to leave in an existing
+  `write_config.yaml` but can be removed.
+* Verified with two standalone scripts exercising the auth/token/redirect and
+  role-matching/dependency logic against throwaway SQLite DBs (not
+  committed) -- all pass, including the 401-vs-403 distinction, the
+  instructor-is-a-superset-of-student behavior, `require_submit_permission`
+  correctly rejecting a plain student token, and both startup warnings
+  firing. Full end-to-end exercise of the FastAPI endpoints (`TestClient`,
+  real Google exchange) wasn't possible in this pass since the local dev
+  `write_config.yaml`/`read_config.yaml` point at a MySQL instance that isn't
+  running in this environment -- a pre-existing local-environment gap
+  unrelated to this change.
 
 Not built yet / explicitly deferred:
 
 * **Clients**: neither the VS Code extension's loopback-server login flow nor
   the web app's login button/callback page exist — this pass is server-only.
 * **Whitelist backend**: only Google is implemented; the whitelist mechanism
-  (both as an alternative login backend and, later, as an authorization
-  layer) is still just a design note above.
-* **Authorization/roles**: out of scope per the earlier decision — `/read/`
-  endpoints still use the placeholder `X-API-Key` check in
-  `src/provena/api/read/common.py`, not the new token system. Wiring real
-  users into those endpoints (and deciding what "instructor access" means) is
-  a separate follow-up.
+  as an *authentication* backend (an alternative to OAuth, not the
+  whitelist *role type* above, which is built) is still just a design note.
 * **Real Google OAuth credentials**: `auth_config.yaml` needs an actual Cloud
   Console project/client id/secret before login can work end-to-end; nothing
   here creates or validates those.
+* **SubjectID ↔ identity enforcement**: role checks gate whether a request is
+  allowed at all, not whether the claimed `SubjectID` in the request body
+  matches the authenticated user's identity -- see "Non-goals" above.
 * **Migrations**: schema changes currently rely on `create_all` (fine while
   there are no rows yet); if `auth_users`/`auth_oauth_identities`/
   `auth_tokens` need to change shape after real data exists, that'll need an

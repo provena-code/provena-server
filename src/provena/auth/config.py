@@ -1,7 +1,10 @@
-from typing import Optional
+import logging
+logger = logging.getLogger(__name__)
+
+from typing import List, Literal, Optional
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class GoogleBackendConfig(BaseModel):
@@ -26,6 +29,70 @@ class TokenConfig(BaseModel):
     """Fixed expiry for web app tokens."""
 
 
+RoleType = Literal["whitelist", "pattern", "open"]
+
+
+class RoleConfig(BaseModel):
+    """
+    Determines which logged-in users (by email) are granted a role.
+    * "whitelist": only the exact emails in `emails`.
+    * "pattern": any email matching the glob-style `pattern` (e.g.
+      "*@ncsu.edu"), matched case-insensitively.
+    * "open": any authenticated user qualifies -- and no credential (API key
+      or login) is required at all. See provena.auth.roles for how this is
+      enforced.
+    There is no blacklist mechanism.
+    """
+
+    type: RoleType
+    emails: List[str] = []
+    pattern: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _check_fields_for_type(self) -> "RoleConfig":
+        if self.type == "whitelist" and not self.emails:
+            raise ValueError('roles: type "whitelist" requires a non-empty "emails" list.')
+        if self.type == "pattern" and not self.pattern:
+            raise ValueError('roles: type "pattern" requires a "pattern" string.')
+        return self
+
+
+class InstructorRoleConfig(RoleConfig):
+    api_keys: List[str] = []
+    """Full instructor privilege (grants everything a student can do too).
+    Meant to stay private -- instructor/dev use, testing, admin scripts."""
+
+
+class StudentRoleConfig(RoleConfig):
+    submit_api_keys: List[str] = []
+    """Grants ONLY /submit permission, nothing else -- not general student
+    access. Meant for the autograder, which is less trusted than an
+    instructor's own machine; there is no general-purpose "student role" API
+    key, since a plain student identity is always proven via OAuth login."""
+
+
+class RolesConfig(BaseModel):
+    instructor: InstructorRoleConfig
+    student: StudentRoleConfig
+
+    @model_validator(mode="after")
+    def _warn_on_risky_config(self) -> "RolesConfig":
+        if self.instructor.type == "open":
+            logger.warning(
+                "auth_config.yaml: roles.instructor.type is 'open' -- any authenticated "
+                "user (or no credential at all) will be granted instructor access, "
+                "including read access to all student data."
+            )
+        if self.student.type != "open" and not self.student.submit_api_keys:
+            logger.warning(
+                "auth_config.yaml: roles.student.submit_api_keys is empty and "
+                "roles.student.type is not 'open' -- /submit will be uncallable by "
+                "anything other than an instructor credential (e.g. the autograder "
+                "won't be able to call it)."
+            )
+        return self
+
+
 class AuthConfig(BaseModel):
     active_backend: str
     """Name of the single auth backend this deployment uses (e.g. "google").
@@ -44,6 +111,7 @@ class AuthConfig(BaseModel):
 
     backends: BackendsConfig = BackendsConfig()
     token: TokenConfig = TokenConfig()
+    roles: RolesConfig
 
     @classmethod
     def from_yaml(cls, yaml_path: str) -> "AuthConfig":
