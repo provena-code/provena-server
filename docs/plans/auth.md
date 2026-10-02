@@ -358,6 +358,53 @@ Logout revokes only the current token/session, not all sessions for a user.
 Per the instructor: logging out is mainly for switching users (e.g. a shared
 machine), which is rare, so a "log out everywhere" isn't needed now.
 
+## Hardening pass
+
+Triggered by a review question ("since we're trusting Google for the email,
+is this actually secure?"). The core mechanism checked out: Authlib verifies
+the ID token's signature (against Google's live JWKS), issuer, audience (our
+`client_id` -- blocks a token issued to a different app from being replayed
+against us), expiry, and `nonce` (replay protection tied to our session)
+before we ever read a claim out of it -- confirmed by reading
+`authlib/integrations/starlette_client/apps.py` and `authlib/oidc/core/claims.py`
+directly rather than assuming. Five concrete items came out of that review:
+
+1. **`email_verified` wasn't checked.** Authlib surfaces the claim but
+   doesn't enforce it -- that's an application decision. Fixed in
+   `backends/google.py`: reject the login if `email_verified is False`
+   (treated as explicit rejection; a *missing* claim is tolerated, since
+   non-OIDC-style responses might omit it and Google's normal flows always
+   set it true).
+2. **Token delivery: fragment vs. query string, split by `client_type`.**
+   `client_type="web"` now delivers the token (and the other params) via the
+   URL *fragment* (`append_fragment_params` in `redirects.py`) instead of the
+   query string -- a fragment is never transmitted to any server, so it can't
+   leak into access logs or `Referer` headers on a real multi-hop web
+   request. `client_type="cli"` (the VS Code loopback server) deliberately
+   keeps the query string: a fragment would require the extension to serve
+   its own HTML+JS page that reads `location.hash` and posts it back to
+   itself (a real server can't read a fragment off the request line at
+   all), and the loopback destination has no intermediary logs/proxies to
+   leak into in the first place, so that complexity wouldn't buy much.
+   Cross-repo note for `provena-client`: if its callback route already uses
+   a hash-based SPA router, our params are appended after the existing
+   fragment with `&` (e.g. `#/callback&token=...`), not merged/parsed --
+   it's responsible for splitting that itself.
+3. **Session cookie secure-by-default.** `SessionMiddleware`'s `https_only`
+   now defaults to `True`; `run_api.bat` sets
+   `PROVENA_ALLOW_INSECURE_COOKIES=1` to opt out for local HTTP dev, logged
+   as a warning when set. `run_api_prod.sh` doesn't set it, so production
+   stays secure by default rather than needing someone to remember a flag.
+4. **Constant-time API key comparison.** `roles.py`'s `_matches_any_key`
+   uses `secrets.compare_digest` per key instead of `in` list membership, so
+   a wrong guess can't be timed against any individual configured key.
+5. **Google `hd` (hosted domain) param**, added as an explicit, optional
+   `backends.google.hd` config field (not inferred from `roles.student`'s
+   pattern) -- restricts Google's account picker to a Workspace domain as a
+   UX nicety. Explicitly documented as NOT a security boundary: the
+   `roles.*` whitelist/pattern checks remain the actual enforcement
+   regardless of whether `hd` is set or what it's set to.
+
 ## Implementation status
 
 Built (server side):

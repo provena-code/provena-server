@@ -1,6 +1,8 @@
 import logging
 logger = logging.getLogger(__name__)
 
+from typing import Optional
+
 from authlib.integrations.starlette_client import OAuth
 from fastapi import HTTPException, Request, status
 from starlette.responses import Response
@@ -11,7 +13,8 @@ from provena.auth.backends.base import AuthBackend, ExternalIdentity
 class GoogleOAuthBackend(AuthBackend):
     name = "google"
 
-    def __init__(self, client_id: str, client_secret: str):
+    def __init__(self, client_id: str, client_secret: str, hd: Optional[str] = None):
+        self._hd = hd
         self._oauth = OAuth()
         self._oauth.register(
             name="google",
@@ -22,7 +25,8 @@ class GoogleOAuthBackend(AuthBackend):
         )
 
     async def login(self, request: Request, callback_url: str) -> Response:
-        return await self._oauth.google.authorize_redirect(request, callback_url)
+        extra = {"hd": self._hd} if self._hd else {}
+        return await self._oauth.google.authorize_redirect(request, callback_url, **extra)
 
     async def callback(self, request: Request) -> ExternalIdentity:
         try:
@@ -42,6 +46,12 @@ class GoogleOAuthBackend(AuthBackend):
         user_info = token.get("userinfo")
         if not user_info or not user_info.get("sub") or not user_info.get("email"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Google did not return a verified profile.")
+        if user_info.get("email_verified") is False:
+            # Authlib verifies the ID token's signature/issuer/audience/expiry/nonce,
+            # but doesn't itself enforce email_verified -- that's an
+            # application decision. Our role checks (whitelist/pattern) key
+            # off this email, so an unverified one can't be trusted here.
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Google account email is not verified.")
 
         return ExternalIdentity(
             provider=self.name,

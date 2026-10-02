@@ -14,6 +14,15 @@ class GoogleBackendConfig(BaseModel):
     """Must exactly match a redirect URI registered for this OAuth client in
     the Google Cloud Console credentials page."""
 
+    hd: Optional[str] = None
+    """Optional Google Workspace hosted-domain hint (e.g. "ncsu.edu"), passed
+    to Google's authorization request to restrict the account picker to that
+    domain. This is a UX nicety only, NOT a security boundary -- it doesn't
+    stop someone from requesting a login without it and nothing here
+    verifies it against the returned token, so the roles.student/.instructor
+    whitelist/pattern checks remain the actual enforcement. Set explicitly;
+    not inferred from a role's pattern."""
+
 
 class BackendsConfig(BaseModel):
     google: Optional[GoogleBackendConfig] = None

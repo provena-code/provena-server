@@ -10,7 +10,7 @@ def _build_backend(name: str) -> AuthBackend:
         cfg = auth_config.backends.google
         if cfg is None:
             raise ValueError("active_backend is 'google' but no backends.google section was found in auth_config.yaml")
-        return GoogleOAuthBackend(client_id=cfg.client_id, client_secret=cfg.client_secret)
+        return GoogleOAuthBackend(client_id=cfg.client_id, client_secret=cfg.client_secret, hd=cfg.hd)
     raise ValueError(f"Unknown auth backend: {name!r}")
 
 

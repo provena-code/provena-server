@@ -4,6 +4,7 @@ from MySQLdb import OperationalError
 logger = logging.getLogger(__name__)
 
 import importlib
+import os
 import pkgutil
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
@@ -38,7 +39,19 @@ app.add_middleware(
 # client_redirect_uri/client_type passed to /auth/login) -- see
 # provena.api.auth.auth. Not used for issued API tokens, which are opaque and
 # DB-backed.
-app.add_middleware(SessionMiddleware, secret_key=auth_config.session_secret_key)
+#
+# Secure (HTTPS-only) by default. Local HTTP dev needs an explicit opt-out
+# rather than a config file setting, since it's about the environment you're
+# running in, not a deployment choice someone should accidentally leave on --
+# see PROVENA_ALLOW_INSECURE_COOKIES in run_api.bat.
+_allow_insecure_cookies = os.environ.get("PROVENA_ALLOW_INSECURE_COOKIES", "").lower() in ("1", "true", "yes")
+if _allow_insecure_cookies:
+    logger.warning("PROVENA_ALLOW_INSECURE_COOKIES is set -- the login session cookie will be sent over plain HTTP. Do not set this in production.")
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=auth_config.session_secret_key,
+    https_only=not _allow_insecure_cookies,
+)
 
 for module_info in pkgutil.walk_packages(provena.api.__path__, provena.api.__name__ + "."):
     # logger.info(f"Loading API module: {module_info.name}")

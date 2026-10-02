@@ -1,5 +1,6 @@
 import fnmatch
-from typing import Optional
+import secrets
+from typing import List, Optional
 
 from fastapi import Depends, Header, HTTPException, Security, status
 from fastapi.security import APIKeyHeader
@@ -23,6 +24,16 @@ def matches_role(email: str, role: RoleConfig) -> bool:
     if role.type == "pattern":
         return fnmatch.fnmatchcase(email, role.pattern.lower())
     raise ValueError(f"Unknown role type: {role.type!r}")
+
+
+def _matches_any_key(candidate: Optional[str], keys: List[str]) -> bool:
+    # Constant-time per comparison (secrets.compare_digest), so a wrong guess
+    # can't be timed against individual keys. Checking a candidate against
+    # N keys in sequence still only takes O(N) comparisons either way --
+    # that's fine here, since these lists are short and not secret in count.
+    if not candidate:
+        return False
+    return any(secrets.compare_digest(candidate, key) for key in keys)
 
 
 def _resolve_optional_user(authorization: Optional[str], db: Session) -> Optional[User]:
@@ -74,7 +85,7 @@ def _require_role(
         return None
     if student_ok and student.type == "open":
         return None
-    if api_key and api_key in instructor.api_keys:
+    if _matches_any_key(api_key, instructor.api_keys):
         return None
 
     user = _resolve_optional_user(authorization, db)
@@ -110,7 +121,7 @@ def require_submit_permission(
         return None
     if instructor.type == "open":
         return None
-    if api_key and (api_key in instructor.api_keys or api_key in student.submit_api_keys):
+    if _matches_any_key(api_key, instructor.api_keys) or _matches_any_key(api_key, student.submit_api_keys):
         return None
 
     user = _resolve_optional_user(authorization, db)

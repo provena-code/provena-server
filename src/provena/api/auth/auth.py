@@ -12,7 +12,7 @@ from provena.auth.backends.registry import get_active_backend, get_backend
 from provena.auth.db import Base, engine
 from provena.auth.dependencies import get_auth_db, get_current_token
 from provena.auth.models import OAuthIdentity, Token, User
-from provena.auth.redirects import append_query_params, is_allowed_redirect_uri
+from provena.auth.redirects import append_fragment_params, append_query_params, is_allowed_redirect_uri
 from provena.auth.tokens import issue_token, revoke_token
 from provena.configs import auth_config
 
@@ -119,7 +119,21 @@ async def google_callback(request: Request, db: Session = Depends(get_auth_db)):
         params["name"] = user.display_name
     if client_state is not None:
         params["state"] = client_state
-    return RedirectResponse(append_query_params(client_redirect_uri, params))
+
+    # "web" delivers via the URL fragment, not the query string: a fragment
+    # is never sent to any server (stripped client-side before the request
+    # goes out), keeping the token out of access logs/Referer headers for a
+    # real multi-hop web request -- the page just reads it via
+    # `location.hash`. "cli"'s destination is the VS Code extension's own
+    # local loopback server, which receives the redirect directly with no
+    # intermediary network hop to leak into, so the query string (which a
+    # plain local HTTP server can actually read off the request line,
+    # unlike a fragment) stays simplest there.
+    if client_type == "web":
+        target = append_fragment_params(client_redirect_uri, params)
+    else:
+        target = append_query_params(client_redirect_uri, params)
+    return RedirectResponse(target)
 
 
 @router.post("/logout", operation_id="authLogout")
