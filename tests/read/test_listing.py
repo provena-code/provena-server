@@ -101,7 +101,6 @@ def test_unknown_assignment_has_no_subjects(get):
     assert get("/read/assignments/nope/subjects") == []
 
 
-@pytest.mark.xfail(reason="B8: MaxScore is a required float, so a subject whose submissions all lack a Score makes the endpoint 500")
 def test_assignment_subjects_with_no_scores(app, client):
     from fastapi.testclient import TestClient
     seed_events([submit("s1", None, "2026-01-01T00:00:00")])

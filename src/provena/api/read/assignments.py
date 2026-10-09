@@ -1,6 +1,8 @@
 
 from fastapi import APIRouter
 from fastapi.params import Depends
+from typing import Optional
+
 from pydantic import BaseModel
 from progsnap2.database.reader.sql_reader import SQLReader
 from progsnap2.spec.enums import CoreTables, EventType, MainTableColumns as Cols,  EditType
@@ -27,7 +29,8 @@ def get_assignments(reader: SQLReader = Depends(create_reader)):
 class AssignmentSubjectsResponseItem(BaseModel):
     SubjectID: str
     LastSubmissionTime: str
-    MaxScore: float
+    MaxScore: Optional[float]
+    """None if none of the subject's submissions has a Score."""
 
 @router.get("/assignments/{assignment_id}/subjects", operation_id="getSubjectStatsForAssignment")
 def get_subject_stats_for_assignment(assignment_id: str, reader: SQLReader = Depends(create_reader)) -> list[AssignmentSubjectsResponseItem]:

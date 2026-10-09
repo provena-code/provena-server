@@ -139,7 +139,6 @@ def test_null_optional_fields_are_accepted(submit, field):
     assert submit(submission(**{field: None})).status_code == 200
 
 
-@pytest.mark.xfail(reason="B23 (D15): Optional[...] without a default is a required key in pydantic v2, so omitting it is a 422")
 @pytest.mark.parametrize("field", ["Score", "ScoreDetails", "TermID", "CourseID"])
 def test_optional_fields_can_be_omitted(submit, field):
     body = submission()
@@ -158,7 +157,6 @@ def test_submit_does_not_go_through_the_events_fallback(submit):
     assert main_table_rows() == []
 
 
-@pytest.mark.xfail(raises=TypeError, reason="B5: log_submit's logger.info passes an argument with no placeholder")
 def test_submit_logs_cleanly_at_info(submit, caplog):
     with caplog.at_level(logging.INFO, logger="provena.api.logging.logging"):
         submit(submission())

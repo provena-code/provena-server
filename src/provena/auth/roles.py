@@ -33,7 +33,10 @@ def _matches_any_key(candidate: Optional[str], keys: List[str]) -> bool:
     # that's fine here, since these lists are short and not secret in count.
     if not candidate:
         return False
-    return any(secrets.compare_digest(candidate, key) for key in keys)
+    # Compared as bytes: compare_digest only accepts ASCII str, and header
+    # values can contain any character.
+    candidate_bytes = candidate.encode("utf-8")
+    return any(secrets.compare_digest(candidate_bytes, key.encode("utf-8")) for key in keys)
 
 
 def _resolve_optional_user(authorization: Optional[str], db: Session) -> Optional[User]:

@@ -211,10 +211,10 @@ class SubmissionInfo(BaseModel):
 class SubmitEvent(SubmissionInfo):
     AssignmentID: str
     ToolInstances: str
-    Score: Optional[float]
-    ScoreDetails: Optional[str]
-    TermID: Optional[str]
-    CourseID: Optional[str]
+    Score: Optional[float] = None
+    ScoreDetails: Optional[str] = None
+    TermID: Optional[str] = None
+    CourseID: Optional[str] = None
 
 @router.post("/submit", operation_id="submit", response_model=LogResult, dependencies=[Depends(require_submit_permission)])
 def log_submit(event: SubmitEvent, writer: SQLWriter = Depends(create_writer)): # type: ignore
@@ -261,7 +261,7 @@ def log_submit(event: SubmitEvent, writer: SQLWriter = Depends(create_writer)): 
                 new_event[Cols.SubjectID] = subject
                 events.append(new_event)
 
-    logger.info(f"Logging {len(events)} Submit events", events)
+    logger.info(f"Logging {len(events)} Submit events")
 
     # Add IDs after generating events, since there are multiple
     # possible code files here...

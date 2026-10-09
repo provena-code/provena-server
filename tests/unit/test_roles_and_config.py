@@ -75,7 +75,6 @@ def test_matches_any_key(candidate, keys, expected):
     assert _matches_any_key(candidate, keys) is expected
 
 
-@pytest.mark.xfail(raises=TypeError, reason="B13: secrets.compare_digest raises on non-ASCII str, so such an X-API-Key header gives a 500")
 def test_non_ascii_key_is_rejected_not_raised():
     assert _matches_any_key("clé", ["k1"]) is False
 
