@@ -205,7 +205,7 @@ class CodeStateSection(BaseModel):
     Code: str
 
 class SubmissionInfo(BaseModel):
-    SubjectIDs: List[str] = Field(..., min_items=1)
+    SubjectIDs: List[str] = Field(..., min_length=1)
     CodeState: List[CodeStateSection]
 
 class SubmitEvent(SubmissionInfo):
