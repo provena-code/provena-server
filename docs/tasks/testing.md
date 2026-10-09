@@ -311,10 +311,11 @@ The full run takes about 2 s.
   LoggingError event. `xfail`: B2, B3, B25.
 * `tests/test_startup.py` (D9): a connection error at startup is
   tolerated. `xfail`: B26.
-* Partial writes across separate commits (`_add_error_event`'s two
-  commits, `google_callback` then `issue_token`) aren't forced yet. With
-  B14 (now fixed), the link-table write always failed, so the partial state
-  was the normal state. Worth adding now.
+* `test_partial_writes.py`: multi-commit operations with the second step
+  forced to fail. `_add_error_event` leaves an event without details, or
+  details (saying the event failed) without an event. `google_callback`
+  leaves the user and identity without a token, and a retry reuses them.
+  All pinned as acceptable `[inferred]`.
 
 ### T4: Read endpoints — done
 
