@@ -515,6 +515,9 @@ each one's test flips when it's done.
   get 403 `insufficient_role`, not 401.
 * **B21 (D12).** `/events` should overwrite a client-supplied
   `ServerTimestamp` and say so in the response's warnings.
+  * **Fixed** (2026-10-09, `fix/b21-overwrite-server-timestamp`):
+    `discard_client_server_timestamps` drops client values (with a warning)
+    on both the endpoint and the validation-handler paths.
 * **B22 (D13).** Duplicate `EventID`s: see D13 for the intended behavior.
 * **B23 (D15).** `/submit`'s `Score`, `ScoreDetails`, `TermID` and
   `CourseID` should default to `None`.
