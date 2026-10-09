@@ -480,8 +480,11 @@ each one's test flips when it's done.
   handler writes a `LoggingError` event (plus a link row, once B14 is
   fixed) for anonymous requests. Valid JSON that fails the model is
   checked *after* auth and gets a 401, so anonymous callers can't plant
-  events, only error rows: a spam/DoS vector. Fix: check credentials in the
-  handler before logging.
+  events, only error rows: a spam/DoS vector.
+  * **Fixed** (2026-10-09, `fix/b15-unauthenticated-error-logging`): the
+    handler runs `require_student_role` itself before logging, and returns
+    its 401/403. The DB lookup runs on the event loop like the rest of the
+    handler (B18).
 * **B16. Multi-subject `/submit` reuses one `EventID`.** Each subject's
   parent Submit event is a copy of the same dict, so they share an
   `EventID`, and every subject's children point at that same
