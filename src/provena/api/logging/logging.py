@@ -233,33 +233,29 @@ def log_submit(event: SubmitEvent, writer: SQLWriter = Depends(create_writer)): 
 
     del base_event["CodeState"]
     del base_event["SubjectIDs"]
-    parent_event = base_event.copy()
-    parent_event[Cols.EventID] = writer.generate_event_id()
-    subjectless_events = [parent_event]
-    if len(codestate_sections) == 1:
-        parent_event[Cols.Code] = codestate_sections[0]["Code"]
-        parent_event[Cols.CodeStateSection] = codestate_sections[0]["CodeStateSection"]
-    else:
+    # Per subject: one Submit event, carrying the Score. With a single file,
+    # it also carries the code; with several, each file gets a child event
+    # pointing at that subject's parent. Every event gets its own EventID.
+    events = []
+    for subject in subjects:
+        parent_event = base_event.copy()
+        parent_event[Cols.EventID] = writer.generate_event_id()
+        parent_event[Cols.SubjectID] = subject
+        events.append(parent_event)
+        if len(codestate_sections) == 1:
+            parent_event[Cols.Code] = codestate_sections[0]["Code"]
+            parent_event[Cols.CodeStateSection] = codestate_sections[0]["CodeStateSection"]
+            continue
         for section in codestate_sections:
             sub_event = base_event.copy()
+            sub_event[Cols.EventID] = writer.generate_event_id()
+            sub_event[Cols.SubjectID] = subject
             sub_event[Cols.CodeStateSection] = section["CodeStateSection"]
             sub_event[Cols.Code] = section["Code"]
             sub_event[Cols.ParentEventID] = parent_event[Cols.EventID]
             sub_event[Cols.Score] = None
             sub_event["ScoreDetails"] = None
-            subjectless_events.append(sub_event)
-
-    if len(subjects) == 1:
-        for e in subjectless_events:
-            e[Cols.SubjectID] = subjects[0]
-        events = subjectless_events
-    else:
-        events = []
-        for subject in subjects:
-            for sub_event in subjectless_events:
-                new_event = sub_event.copy()
-                new_event[Cols.SubjectID] = subject
-                events.append(new_event)
+            events.append(sub_event)
 
     logger.info(f"Logging {len(events)} Submit events", events)
 
