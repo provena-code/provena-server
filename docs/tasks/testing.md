@@ -1,7 +1,7 @@
 # Testing plan for the `provena` server package
 
-Status: **planning done; T0 in progress**. No tests exist yet for
-`src/provena`. The `toolbox` submodule (ProgSnapToolkit) has its own suite
+Status: **T0 done** (infrastructure, smoke tests, B7 regression tests);
+T1–T4 next. The `toolbox` submodule (ProgSnapToolkit) has its own suite
 (`toolbox/tests`), which is out of scope except where section 4 suggests
 moving shared infrastructure there.
 
@@ -174,40 +174,57 @@ pending.*
 Each sub-task is meant to be one reviewable PR. **T0 blocks the rest.**
 After T0, T1–T4 can go in any order.
 
-### T0: Test infrastructure (blocking)
+### T0: Test infrastructure (blocking) — done
 
-Production change (done, pending review):
+Production changes:
 * `configs.py` reads its YAML files from `PROVENA_CONFIG_DIR` (default:
   `src/provena/config/`, so nothing changes for existing setups).
+* `init_app_tables(bind=...)` takes an optional engine, so tests can build
+  fresh or legacy schemas in a separate database.
 
-Test-side:
-* A root `pyproject.toml` with `[tool.pytest.ini_options]`:
-  `pythonpath = ["src"]`, `testpaths = ["tests"]`, and markers
-  (`concurrency`, `slow`).
-* `tests/test_config.example.yaml`, plus a `.gitignore` entry for
-  `tests/test_config.yaml`.
-* `tests/conftest.py`:
-  * At startup (before importing provena): read the test config, create
-    `provena_test_<random>`, write `write/read/auth_config.yaml` into a
-    temp dir pointing at it, and set `PROVENA_CONFIG_DIR`. The auth config
-    has known test API keys and roles (student pattern `*@student.test`,
-    instructor whitelist `prof@instructor.test`). Drop the DB at session
-    end. With no `tests/test_config.yaml`, exit with a clear message.
-  * `client` fixture: `TestClient(app)` used as a context manager.
-  * Autouse `clean_db` fixture: `DELETE FROM` every table after each test,
-    following the FK note in section 2.
-  * Credential helpers: `student_headers(email=...)` /
-    `instructor_headers()` issue real tokens through `issue_token` and
-    return `{"Authorization": "Bearer ..."}`. `instructor_key_headers()` /
-    `submit_key_headers()` return `{"X-API-Key": ...}`.
-  * Data builders in `tests/support/` (see section 4): `make_event(...)`,
-    `seed_events([...])` through a real `SQLWriter`.
-* Smoke tests:
-  * The app imports.
-  * `/read/sessions/x/last_synced_order` returns `-1` on an empty DB.
-  * The DB actually in use is the `provena_test_*` one.
-* Root `requirements-dev.txt`: `pytest`, `pytest-cov`, `httpx`.
-* `CLAUDE.md`: add how to run the suite.
+Test side, as built:
+* Root `pyproject.toml`: `pythonpath = ["src", "."]`, `testpaths`,
+  `--strict-markers`, `xfail_strict = true`, markers (`concurrency`,
+  `slow`), and coverage settings (branch coverage of `src/provena`).
+* `tests/test_config.example.yaml`; the real `tests/test_config.yaml` is
+  gitignored. `PROVENA_TEST_MYSQL_URL` overrides the URL. With neither,
+  pytest stops with a message saying what to do.
+* `tests/conftest.py`, in `pytest_configure` (before any test module is
+  collected): creates `provena_test_<random>`, writes the three configs to
+  a temp dir, sets `PROVENA_CONFIG_DIR`, and imports `provena.main`, so the
+  import-time setup runs once, in the right order. `pytest_unconfigure`
+  disposes the app's engines and drops the DB (unless `keep_database`).
+  Test auth config: student pattern `*@student.test`, instructor whitelist
+  `prof@instructor.test`, known instructor and submit API keys
+  (`tests/support/app_config.py`).
+* Fixtures: `app`, `client` (`TestClient`, per test), `test_db_engine`,
+  autouse `clean_db` (deletes all rows except `Metadata` after each test,
+  FK checks off), and `scratch_database` (a factory for extra throwaway
+  DBs, for schema tests).
+* `tests/support/`:
+  * `databases.py`: create/drop/clear throwaway DBs, with the
+    `provena_test_` guard. No provena imports (toolbox candidate).
+  * `progsnap2_events.py`: `make_event(spec, event_type, **overrides)`,
+    which fills in what the spec requires; `None` removes a column. No
+    provena imports (toolbox candidate).
+  * `provena_helpers.py`: `student_headers()`, `instructor_headers()`,
+    `instructor_key_headers()`, `submit_key_headers()`; `event(...)`
+    (provena's spec) and `seed_events([...])`, which stores events the way
+    `/events` does, minus HTTP and auth.
+* `test_smoke.py`: routers registered; all three engines use the test DB;
+  `last_synced_order` is `-1` on an empty DB; posted and seeded events are
+  readable; the instructor key reaches `/read/*`; `clear_tables` keeps only
+  `Metadata`.
+* `test_app_tables.py` (B7 regression): startup creates the whole schema;
+  a fresh `LinkAssignmentMap` is keyed on the hash; a legacy table (with a
+  row) migrates to exactly the fresh DDL; `init_app_tables` is idempotent;
+  paths sharing a 300-char prefix are distinct; duplicates are rejected;
+  paths differing only in case are distinct (pins D8's side effect).
+  Checked against a mutant: disabling the migration fails the legacy test.
+* `requirements-dev.txt` (`pytest`, `pytest-cov`, `httpx`); `CLAUDE.md`
+  says how to run the suite.
+
+The full run takes about 2 s.
 
 ### T1: Pure unit tests (no DB)
 
@@ -264,6 +281,14 @@ Test-side:
 * `/submit` fan-out: {1, N} subjects × {1, N} sections. Check
   `ParentEventID` links, `Score`/`ScoreDetails` on the parent only, and
   `CodeStateID` per section; `SubjectIDs: []` is rejected.
+* Partial writes across separate commits. Force the second write to fail
+  and assert what's left in the DB:
+  * `_add_error_event` commits the `LoggingError` event, then the
+    `LinkLoggingError` row separately.
+  * `google_callback` commits the user and identity before `issue_token`
+    commits the token (this one is probably harmless).
+  * Also worth noting for T5: `resolve_token` commits on every
+    authenticated request.
 * `/get_event_count`: match by hash; suffix fallback (`a/b/x.py` vs
   `x.py`, and `xx.py` must *not* match); rename chains including cycles;
   `Submit` excluded; **repeat calls in one process** (bug B1).

@@ -6,3 +6,6 @@ openapi.json
 app.out
 uvicorn.pid
 venv
+tests/test_config.yaml
+.coverage
+htmlcov/

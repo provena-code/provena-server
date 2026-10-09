@@ -42,7 +42,11 @@ pytest
 ```
 `toolbox/pyproject.toml` sets `pythonpath = ["src"]` for pytest. Run a single test with the usual `pytest path/to/test_file.py::test_name`. Run the toolbox suite only from inside `toolbox/`: its conftest `rmtree`s a *relative* `./test_data/` at session start, so running it from the repo root would delete the dev DBs in the root `test_data/`.
 
-There is no test suite yet for the `provena` server package itself (`src/provena`). The plan, the testability constraints (import-time config/DB side effects, MySQL-specific semantics), and the log of behavior decisions are in `docs/tasks/testing.md`.
+Run the server's own test suite (`tests/`, configured in the root `pyproject.toml`) from the repo root:
+```
+./.conda/python.exe -m pytest            # add --cov for branch coverage of src/provena
+```
+It needs a MySQL server: copy `tests/test_config.example.yaml` to `tests/test_config.yaml` (gitignored) and fill in the URL, or set `PROVENA_TEST_MYSQL_URL`. Each run creates its own `provena_test_<random>` database, points the app at it via `PROVENA_CONFIG_DIR`, and drops it afterwards, so it never touches the dev/course DB in `src/provena/config/`. `tests/conftest.py` does this in `pytest_configure` and imports `provena.main` there, because of the import-time side effects below; don't import provena at the top of `conftest.py`. Rows are deleted after every test (the app commits internally, so per-test rollback isn't possible). Helpers live in `tests/support/`: `provena_helpers.py` (credential headers backed by real tokens/API keys, `event(...)`, `seed_events(...)`) and the provena-independent `databases.py`/`progsnap2_events.py`. The plan, the testability constraints, and the log of behavior decisions are in `docs/tasks/testing.md`.
 
 Load-test with Locust: `locustfile.py` at the repo root exercises `/events`, `/submit`, `/get_event_count`, and `/read/sessions/{id}/last_synced_order` against a running server (defaults to `http://127.0.0.1:8001/`). See `locust.md` for the scenario spec it was generated from.
 

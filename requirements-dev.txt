@@ -1,0 +1,5 @@
+# Test dependencies for the provena server suite (tests/). Install alongside
+# the toolbox: pip install -e ./toolbox[api,dev] -r requirements-dev.txt
+pytest
+pytest-cov
+httpx

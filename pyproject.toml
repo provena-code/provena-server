@@ -1,0 +1,17 @@
+# Test configuration for the provena server package (src/provena). This isn't
+# a packaging config: the server runs from source (see run_api.bat). The
+# toolbox submodule has its own, separate pytest config in toolbox/.
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+testpaths = ["tests"]
+addopts = ["--strict-markers"]
+xfail_strict = true
+markers = [
+    "concurrency: overlapping requests against a live server (docs/tasks/testing.md, T5)",
+    "slow: takes more than a few seconds",
+]
+
+[tool.coverage.run]
+source = ["src/provena"]
+branch = true
