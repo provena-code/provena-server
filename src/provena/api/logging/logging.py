@@ -318,7 +318,11 @@ def get_codestate_sections_for_codestates(session: Session, main_table: Table, s
 
     return found_sections
 
-def get_event_count_for_codestates(session: Session, main_table: Table, subject_ids: List[str], codestate_sections: List[str], alread_checked_codestate_sections: set[str] = set()) -> int:
+def get_event_count_for_codestates(session: Session, main_table: Table, subject_ids: List[str], codestate_sections: List[str], already_checked_codestate_sections: Optional[set[str]] = None) -> int:
+    # A new set per top-level call: a mutable default would be shared by
+    # every request for the life of the process.
+    if already_checked_codestate_sections is None:
+        already_checked_codestate_sections = set()
 
     def c(col: str) -> Column:
         return main_table.c[col]
@@ -331,7 +335,7 @@ def get_event_count_for_codestates(session: Session, main_table: Table, subject_
     )
     result = session.execute(statement).scalar()
 
-    alread_checked_codestate_sections.update(codestate_sections)
+    already_checked_codestate_sections.update(codestate_sections)
 
     # Check for any other names these codestate sections have had before renames
     other_file_names = select(c(Cols.CodeStateSection).distinct()).where(
@@ -340,10 +344,10 @@ def get_event_count_for_codestates(session: Session, main_table: Table, subject_
     )
     other_sections = [row[0] for row in session.execute(other_file_names).fetchall()]
     # logger.info("Other sections to check:", other_sections)
-    other_sections_to_check = [s for s in other_sections if s not in alread_checked_codestate_sections]
+    other_sections_to_check = [s for s in other_sections if s not in already_checked_codestate_sections]
 
     if len(other_sections_to_check) > 0:
-        result += get_event_count_for_codestates(session, main_table, subject_ids, other_sections_to_check, alread_checked_codestate_sections)
+        result += get_event_count_for_codestates(session, main_table, subject_ids, other_sections_to_check, already_checked_codestate_sections)
 
     return result
 

@@ -3,9 +3,9 @@ T3: POST /get_event_count, which counts a subject's logged events for the
 files being submitted: found by code hash, falling back to the file name,
 and following renames back to earlier names.
 
-Paths are unique per test (see `paths`), because of B1: the rename
-search's "already checked" set is shared by every call in the process, so
-reusing a path across tests would make results depend on test order.
+Paths are unique per test (see `paths`). That was needed while B1 made the
+rename search's "already checked" set shared by every call in the process;
+it's kept as cheap insurance against order-dependent results.
 """
 
 import uuid
@@ -150,7 +150,6 @@ def test_renames_by_other_subjects_are_ignored(count, paths):
     assert count([("new.py", CODE)]) == 1
 
 
-@pytest.mark.xfail(reason="B1: the shared default set makes repeat calls skip renames already seen")
 def test_repeat_calls_give_the_same_count(count, paths):
     old, new = paths("old.py"), paths("new.py")
     seed_events(
