@@ -23,6 +23,23 @@ class Base(DeclarativeBase):
     pass
 
 
+def can_connect(bind: Engine) -> bool:
+    """
+    Whether a plain connection to the database works. Startup uses this to
+    tell "the database is briefly unreachable" (tolerated: log, and keep
+    serving until it's back) from "the schema couldn't be created" (fatal).
+    The exception type can't tell them apart: MySQL reports e.g. a too-long
+    index key (error 1071) as an OperationalError, just like a refused
+    connection.
+    """
+    try:
+        with bind.connect():
+            return True
+    except Exception as e:
+        logger.error(f"Can't connect to the database at {bind.url.render_as_string(hide_password=True)}: {e}")
+        return False
+
+
 def init_app_tables(bind: Optional[Engine] = None) -> None:
     """
     Creates any missing app tables in their current shape, then upgrades

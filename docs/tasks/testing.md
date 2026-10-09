@@ -443,9 +443,8 @@ each one's test flips when it's done.
     accent-*sensitive*), but `update_mapping_table`'s `SELECT DISTINCT`
     already collapses case variants under the `ai_ci` collation before
     inserting, so only direct inserts see the difference.
-  * Still open: startup (`logging.py`, and `init_app_tables` in `main.py`)
-    still swallows schema-init errors, so a future DDL failure would again
-    leave a half-created DB silently (D9).
+  * Startup used to swallow schema-init errors, leaving a half-created DB
+    silently; it now fails loudly (D9, B26).
   * Near miss: `codestates`' unique key `(CodeStateID, CodeStateSection)` is
     (255 + 512) × 4 = 3068 bytes, just under the limit. Widening either
     column would hit B7 again there.
@@ -524,7 +523,12 @@ each one's test flips when it's done.
   a 503 with `Retry-After`.
 * **B26 (D9).** A schema/DDL error at startup should stop the server. A
   connection error should still be tolerated.
-
+  * **Fixed** (2026-10-09, `fix/b26-fail-loudly-on-schema-errors`): both
+    startup steps (ProgSnap2 tables in `logging.py`, app tables in
+    `main.py`) first probe the DB with `provena.db.base.can_connect`. If
+    it's unreachable they log and skip; otherwise a schema error propagates
+    and stops the server. The probe is needed because MySQL reports e.g.
+    error 1071 as an OperationalError, like a refused connection.
 (B11 was skipped: it became D15.)
 
 Open behavior questions (not clearly bugs):

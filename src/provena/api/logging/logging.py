@@ -24,6 +24,7 @@ from progsnap2.spec.enums import MainTableColumns as Cols, EventType, LinkTableN
 
 from provena.config.configs import api_config, spec, MainTableEvent
 from provena.auth.roles import require_student_role, require_submit_permission
+from provena.db.base import can_connect
 
 db_writer_factory: SQLIOFactory = IOFactory.create_factory(api_config.database_config, ps2_spec=spec)
 
@@ -33,14 +34,16 @@ db_writer_factory: SQLIOFactory = IOFactory.create_factory(api_config.database_c
 # def noop_execute(conn, cursor, statement, params, context, executemany):
 #     raise RuntimeError("DB disabled")
 
+# Create the ProgSnap2 tables if they're missing. As with the app tables
+# (provena.main), a schema error stops the server, but an unreachable
+# database doesn't (D9).
 # TODO: Don't actually do this automatically every time...
-with db_writer_factory.create_writer() as writer:
-    # Create the tables in the database
-    try:
+if can_connect(db_writer_factory.engine):
+    with db_writer_factory.create_writer() as writer:
         writer.initialize_database()
         # writer.update_database()
-    except Exception as e:
-        logger.error(f"Error initializing database: {e}")
+else:
+    logger.error("Skipped creating the ProgSnap2 tables: the database is unreachable.")
 
 # For use in Depends
 def create_writer():

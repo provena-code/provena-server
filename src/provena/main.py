@@ -17,7 +17,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from provena.api.logging.logging import add_error_event, add_malformatted_events
 from provena.auth.roles import api_key_header, require_student_role
 from provena.config.configs import api_config, auth_config
-from provena.db.base import SessionLocal, init_app_tables
+from provena.db.base import SessionLocal, can_connect, engine, init_app_tables
 import provena.api
 
 # Set python's logging level to uvicorns if uvicorn is being used
@@ -58,10 +58,15 @@ app.add_middleware(
 # Create/upgrade the hand-written (non-ProgSnap2) app tables -- see
 # provena.db.base. The ProgSnap2 logging tables are created separately, when
 # provena.api.logging.logging is imported above.
-try:
+#
+# A schema error stops the server (D9): serving against a half-created schema
+# fails in confusing ways later. An unreachable database doesn't: the server
+# starts anyway and requests fail until it's back (the tables are created on
+# the next restart).
+if can_connect(engine):
     init_app_tables()
-except Exception as e:
-    logger.error(f"Error initializing app tables: {e}")
+else:
+    logger.error("Skipped creating/upgrading the app tables: the database is unreachable.")
 
 for module_info in pkgutil.walk_packages(provena.api.__path__, provena.api.__name__ + "."):
     # logger.info(f"Loading API module: {module_info.name}")
