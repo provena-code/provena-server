@@ -495,6 +495,9 @@ each one's test flips when it's done.
   parent Submit event is a copy of the same dict, so they share an
   `EventID`, and every subject's children point at that same
   `ParentEventID`.
+  * **Fixed** (2026-10-09, `fix/b16-submit-unique-event-ids`): each subject
+    gets its own parent event and EventID; children point at their own
+    subject's parent.
 * **B17. Late-synced logs never get mapped.** `update_mapping_table` only
   considers submissions newer than the newest mapping (across all
   subjects). Take a submission whose logs weren't synced yet: it maps to

@@ -81,14 +81,12 @@ def test_multiple_subjects_each_get_the_full_set(submit):
         assert sorted(r.get("CodeStateSection", "") for r in mine) == ["", "a.py", "b.py"]
 
 
-@pytest.mark.xfail(reason="B16: with several subjects, every subject's parent Submit event shares one EventID")
 def test_event_ids_are_unique_with_multiple_subjects(submit):
     submit(submission(subjects=["s1", "s2"], sections=[("a.py", "a"), ("b.py", "b")]))
     rows = submit_rows()
     assert len({r["EventID"] for r in rows}) == len(rows)
 
 
-@pytest.mark.xfail(reason="B16: children point at a ParentEventID shared by every subject's parent")
 def test_children_point_at_their_own_subjects_parent(submit):
     submit(submission(subjects=["s1", "s2"], sections=[("a.py", "a"), ("b.py", "b")]))
     rows = submit_rows()
