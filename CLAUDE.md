@@ -24,6 +24,8 @@ Before running the server, create these from their `.example.yaml` counterparts 
 
 **Provena officially supports only MySQL.** The toolbox can log to other backends (SQLite, CSV, git), but provena's own queries use MySQL-specific SQL (`ON DUPLICATE KEY UPDATE`, `CONCAT`) and rely on MySQL semantics. In particular, the default `utf8mb4_0900_ai_ci` collation compares strings case- and accent-insensitively, and strict mode rejects over-length strings. Don't add SQLite-only workarounds, and don't assume SQLite behavior when reasoning about queries.
 
+Because of that collation, IDs compare case-insensitively everywhere in SQL. That's intended for `SubjectID`, which is currently the student's email: `Student@X.edu` and `student@x.edu` are the same student, and the same goes for `auth_users.email` and role matching. **If you add an auth backend whose identifiers are case-sensitive**, distinct users could be merged, so normalize or rethink first. Whether case-insensitivity is right for file paths (`CodeStateSection`) is an open question: provena-code/provena-server#22.
+
 `read_config.yaml`/`write_config.yaml` must point at the same database; they're separate because the toolkit separates logging (write) from reading/analytics (read). `auth_config.yaml` reuses that same database's `sqlalchemy_url` for its own hand-written tables, but is otherwise independent config.
 
 ## Common commands
