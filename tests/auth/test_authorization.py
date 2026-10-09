@@ -59,7 +59,7 @@ EXPECTED = {
     "outsider_login":     (FORBIDDEN, FORBIDDEN,  FORBIDDEN),
     "instructor_login":   (OK,        OK,         OK),
     "instructor_key":     (OK,        OK,         OK),
-    # D11: a valid credential without the role is a 403 (B20: 401 today).
+    # D11: a valid credential without the role is a 403.
     "submit_key":         (FORBIDDEN, OK,         FORBIDDEN),
     "student_login+wrong_key":    (OK,  FORBIDDEN, FORBIDDEN),
     "student_login+submit_key":   (OK,  OK,        FORBIDDEN),
@@ -67,11 +67,8 @@ EXPECTED = {
 }
 POLICY_COLUMN = {"student": 0, "submit": 1, "instructor": 2}
 
-# Cells that don't match EXPECTED yet, by (credential, policy).
-KNOWN_BUGS = {
-    ("submit_key", "student"): "B20 (D11): a submit key on a non-submit route is treated as no credential (401)",
-    ("submit_key", "instructor"): "B20 (D11): a submit key on a non-submit route is treated as no credential (401)",
-}
+# Cells that don't match EXPECTED yet, by (credential, policy), with the bug.
+KNOWN_BUGS: dict[tuple[str, str], str] = {}
 
 
 def _expired_login() -> dict[str, str]:
