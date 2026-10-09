@@ -172,3 +172,9 @@ def test_open_student_role_lets_role_less_logins_through(client, monkeypatch):
     _set_role_type(monkeypatch, "student", "open")
     response = client.post("/events", json=[], headers=login_headers("someone@elsewhere.test"))
     assert response.status_code == 200
+
+
+def test_non_ascii_api_key_is_rejected_not_a_500(client):
+    # B13: header values can contain any byte; the key comparison must cope.
+    response = client.post("/events", json=[], headers={"X-API-Key": "clé".encode("utf-8")})
+    assert (response.status_code, response.json()["detail"]) == (401, "reauth_required")

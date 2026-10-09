@@ -414,8 +414,10 @@ each one's test flips when it's done.
   (`tests/write/test_events.py`).
 * **B5. `log_submit`'s `logger.info(f"...", events)`** passes an extra
   argument with no `%s`, which produces a logging-format error.
+  * **Fixed** (2026-10-09, `fix/small-fixes`): removed the extra argument.
 * **B6. `mapping.py` has a stray `from select import select`** (the stdlib
   module). Harmless but confusing.
+  * **Fixed** (2026-10-09, `fix/small-fixes`): removed the import.
 * **B7. The schema can't be created on a fresh MySQL DB.** *Confirmed*
   while checking the T0 config change. `LinkAssignmentMap`'s unique key
   `(SubjectID, AssignmentID, CodeStateSection)` is
@@ -453,6 +455,8 @@ each one's test flips when it's done.
 * **B8. `/read/assignments/{id}/subjects` returns 500 when a subject's
   submissions have no `Score`.** `MaxScore` is a required `float` in the
   response model, but `Score` is nullable on `/submit`.
+  * **Fixed** (2026-10-09, `fix/small-fixes`): `MaxScore` is
+    `Optional[float]` (null when no submission has a Score).
 * **B9. A resubmission doesn't update the mapping's `CodeStateID`.** The
   upsert only sets `LastValidTimestamp`, so `CodeStateID` keeps the first
   submission's code. The model documents it as "the last submission".
@@ -466,6 +470,8 @@ each one's test flips when it's done.
   instead of a 400.
 * **B13. A non-ASCII `X-API-Key` causes a 500.** `secrets.compare_digest`
   raises `TypeError` on non-ASCII `str`.
+  * **Fixed** (2026-10-09, `fix/small-fixes`): keys are compared as UTF-8
+    bytes; a non-ASCII key is a 401.
 * **B14. Error details are never stored.** *Significant.*
   `_add_error_event` calls `add_link_table_entry('linkloggingerror')`. The
   toolbox's case-insensitive table lookup is broken for quoted names: SQLAlchemy's
@@ -518,6 +524,8 @@ each one's test flips when it's done.
 * **B22 (D13).** Duplicate `EventID`s: see D13 for the intended behavior.
 * **B23 (D15).** `/submit`'s `Score`, `ScoreDetails`, `TermID` and
   `CourseID` should default to `None`.
+  * **Fixed** (2026-10-09, `fix/small-fixes`): the four fields default to
+    `None`.
 * **B24.** Withdrawn: see D16. Only the latest submission is meant to be
   mapped.
 * **B25 (D18).** Pool exhaustion (`sqlalchemy.exc.TimeoutError`) should be

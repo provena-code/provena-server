@@ -4,7 +4,6 @@ import logging
 from progsnap2.database.sql_table_manager import SQLTableManager
 logger = logging.getLogger(__name__)
 
-from select import select
 from progsnap2.spec.enums import EventType
 from progsnap2.spec.enums import MainTableColumns as Cols, CoreTables
 
