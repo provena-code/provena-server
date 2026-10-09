@@ -5,7 +5,7 @@ import pytest
 from provena.api.logging.logging import generate_code_hash
 
 from tests.support.provena_helpers import (
-    event, logging_error_rows, main_table_rows, student_headers,
+    event, instructor_key_headers, logging_error_rows, login_headers, main_table_rows, student_headers,
 )
 
 
@@ -257,16 +257,38 @@ def test_validation_errors_on_other_routes_are_plain_422s(client):
     assert logging_error_rows() == []
 
 
-@pytest.mark.xfail(reason="B15: a body that isn't valid JSON fails before the auth dependency runs, so the validation handler logs it anonymously")
-def test_unauthenticated_garbage_is_not_logged(client):
-    response = client.post("/events", content=b"junk", headers={"Content-Type": "application/json"})
-    assert response.status_code == 401
+# A body that isn't valid JSON fails before /events' auth dependency runs, so
+# the validation handler checks credentials itself before logging it (B15).
+
+@pytest.mark.parametrize("headers, expected", [
+    ({}, (401, "reauth_required")),
+    ({"X-API-Key": "wrong-key"}, (401, "reauth_required")),
+    ({"Authorization": "Bearer not-a-real-token"}, (401, "reauth_required")),
+], ids=["none", "wrong_key", "garbage_bearer"])
+def test_unauthenticated_garbage_is_not_logged(client, headers, expected):
+    response = client.post("/events", content=b"junk", headers={"Content-Type": "application/json", **headers})
+    assert (response.status_code, response.json()["detail"]) == expected
     assert main_table_rows() == []
+
+
+def test_garbage_from_a_login_without_the_role_is_not_logged(client):
+    headers = login_headers("someone@elsewhere.test")
+    response = client.post("/events", content=b"junk", headers={"Content-Type": "application/json", **headers})
+    assert (response.status_code, response.json()["detail"]) == (403, "insufficient_role")
+    assert main_table_rows() == []
+
+
+def test_garbage_with_the_instructor_key_is_logged(client):
+    response = client.post("/events", content=b"junk", headers={
+        "Content-Type": "application/json", **instructor_key_headers(),
+    })
+    assert response.status_code == 200
+    assert [r["EventType"] for r in main_table_rows()] == ["LoggingError"]
 
 
 def test_unauthenticated_invalid_events_are_not_stored(client):
     # Valid JSON is only checked against the model after the auth
-    # dependency, so B15 doesn't reach the malformed-event fallback.
+    # dependency, so this never reaches the handler at all.
     events = [event("Session.Start", SubjectID="victim", ToolInstances=None)]
     response = client.post("/events", json=events)
     assert response.status_code == 401
