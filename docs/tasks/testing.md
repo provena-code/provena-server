@@ -460,6 +460,8 @@ each one's test flips when it's done.
   `_get_end_client_timestamp` looks up `last_codestate_id` without filtering
   on `subject_id`. Identical code from another student (e.g. unmodified
   starter code) can set the cutoff.
+  * **Fixed** (2026-10-09, `fix/b10-edits-cutoff-subject`): the lookup also
+    filters on `SubjectID`.
 * **B12. A non-numeric port in `client_redirect_uri` causes a 500.**
   `urlsplit(...).port` raises `ValueError` when an exact-port allowlist
   entry is checked. The request isn't let through; it just fails as a 500

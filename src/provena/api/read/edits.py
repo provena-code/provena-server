@@ -39,7 +39,7 @@ def get_student_edits(
     last_codestate_id: Annotated[str, Query(description="Last CodeStateID")] = None,
     reader: SQLReader = Depends(create_reader)
 ):
-    end_timestamp = _get_end_client_timestamp(last_codestate_id, reader)
+    end_timestamp = _get_end_client_timestamp(subject_id, last_codestate_id, reader)
     if end_timestamp is not None:
         # Add a null character to the end of the timestamp to ensure we include any edits that happened at the same timestamp
         end_timestamp += "\u0000"
@@ -72,7 +72,7 @@ def find_coedited_files(events: list[dict], reader: SQLReader):
     print(coedited_files)
 
 
-def _get_end_client_timestamp(last_code_state_id: str, reader: SQLReader):
+def _get_end_client_timestamp(subject_id: str, last_code_state_id: str, reader: SQLReader):
     if not last_code_state_id:
         return None
 
@@ -84,7 +84,11 @@ def _get_end_client_timestamp(last_code_state_id: str, reader: SQLReader):
     # almost always be the first that actually happened on the client
     # and there's little harm to getting this wrong, since either way
     # we end in the submitted state.
+    # Only this subject's events: other subjects can reach the same code
+    # (e.g. unmodified starter code), and their timestamps say nothing about
+    # this subject's history.
     statement = select(main_table.c.ClientTimestamp).where(
+        main_table.c.SubjectID == subject_id,
         main_table.c.CodeStateID == last_code_state_id
     ).limit(1)
 
