@@ -131,7 +131,6 @@ def test_unknown_codestate_id_means_no_cutoff(get_edits):
     assert orders(get_edits("a.py", last_codestate_id="no-such-id")) == [1, 2]
 
 
-@pytest.mark.xfail(reason="B10: the cutoff looks up the CodeStateID across all subjects, so identical code (e.g. starter code) from another subject can set it")
 def test_cutoff_only_looks_at_this_subjects_code(get_edits):
     from provena.api.logging.logging import generate_code_hash
     seed_events([edit("a.py", 1, SubjectID="s2", Code="starter"),
