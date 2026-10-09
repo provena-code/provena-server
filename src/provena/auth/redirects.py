@@ -1,4 +1,5 @@
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from typing import Optional
+from urllib.parse import SplitResult, parse_qsl, urlencode, urlsplit, urlunsplit
 
 """
 Validates and rewrites the client-supplied `client_redirect_uri` used to send
@@ -11,15 +12,31 @@ this becomes an open redirect that leaks tokens to arbitrary sites.
 
 Allowlist pattern syntax (in auth_config.yaml's redirect_allowlist):
 * "scheme://host:port" matches that exact origin.
-* "scheme://host" matches that host on the scheme's default port.
+* "scheme://host" matches that host on the scheme's default port, whether
+  or not the URI spells it out (":443" for https, ":80" for http), and vice
+  versa.
 * "scheme://host:*" matches that host on any port (for the VS Code loopback
   server, which binds an arbitrary local port).
+A URI with a malformed port (non-numeric or out of range) never matches.
 """
+
+
+_DEFAULT_PORTS = {"http": 80, "https": 443}
+
+
+def _effective_port(parts: SplitResult) -> Optional[int]:
+    """The explicit port, or the scheme's default. Raises ValueError for a
+    malformed port (non-numeric or out of range)."""
+    return parts.port if parts.port is not None else _DEFAULT_PORTS.get(parts.scheme)
 
 
 def is_allowed_redirect_uri(uri: str, allowlist: list[str]) -> bool:
     candidate = urlsplit(uri)
     if candidate.scheme not in ("http", "https") or not candidate.hostname:
+        return False
+    try:
+        candidate_port = _effective_port(candidate)
+    except ValueError:
         return False
 
     for pattern in allowlist:
@@ -29,10 +46,14 @@ def is_allowed_redirect_uri(uri: str, allowlist: list[str]) -> bool:
                 return True
         else:
             base = urlsplit(pattern)
+            try:
+                base_port = _effective_port(base)
+            except ValueError:
+                continue  # a malformed allowlist entry matches nothing
             if (
                 base.scheme == candidate.scheme
                 and base.hostname == candidate.hostname
-                and base.port == candidate.port
+                and base_port == candidate_port
             ):
                 return True
     return False

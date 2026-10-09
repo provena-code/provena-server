@@ -39,7 +39,10 @@ def test_login_hands_off_to_the_backend_with_its_callback_url(https_client, fake
     assert fake_backend.login_calls == ["http://testserver/auth/google/callback"]
 
 
-@pytest.mark.parametrize("redirect", ["https://evil.test/cb", "http://127.0.0.1:80@evil.test/", "javascript:alert(1)"])
+@pytest.mark.parametrize("redirect", [
+    "https://evil.test/cb", "http://127.0.0.1:80@evil.test/", "javascript:alert(1)",
+    "https://webapp.test:abc/cb",  # B12: was a 500
+])
 def test_login_rejects_redirects_outside_the_allowlist(https_client, fake_backend, redirect):
     response = https_client.get("/auth/login", params={"client_redirect_uri": redirect}, follow_redirects=False)
     assert response.status_code == 400
