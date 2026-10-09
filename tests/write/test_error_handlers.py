@@ -33,12 +33,19 @@ def test_unhandled_error_is_a_500_and_logged_as_an_error_event(lenient_client, f
     assert [r["EventType"] for r in main_table_rows()] == ["LoggingError"]
 
 
-@pytest.mark.xfail(reason="B2: the handler sets request = None before reading the body")
 def test_unhandled_error_records_the_request_body(lenient_client, failing_events):
     lenient_client.post("/events", json=[event("Session.Start", SubjectID="find-me")], headers=student_headers())
     [error] = logging_error_rows()
     assert "boom" in error["Error"]
     assert "find-me" in error["RequestBody"]
+
+
+def test_recorded_request_body_is_capped(lenient_client, failing_events, monkeypatch):
+    import provena.main
+    monkeypatch.setattr(provena.main, "_MAX_RECORDED_BODY_BYTES", 20)
+    lenient_client.post("/events", json=[event("Session.Start", SubjectID="x" * 100)], headers=student_headers())
+    [error] = logging_error_rows()
+    assert len(error["RequestBody"]) == 20
 
 
 @pytest.mark.xfail(reason="B3: the handler catches MySQLdb.OperationalError, but SQLAlchemy raises its own OperationalError")

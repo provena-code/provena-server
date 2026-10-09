@@ -406,6 +406,12 @@ each one's test flips when it's done.
   grows without bound and isn't thread-safe.
 * **B2. `global_exception_handler` logs the request body as `None`.** It
   sets `request = None` and then calls `request.body()` on it.
+  * **Fixed** (2026-10-09, `fix/b2-error-handler-request-body`): fixing the
+    `None` assignment alone wasn't enough: this handler runs in Starlette's
+    outermost ServerErrorMiddleware, whose Request can't re-read a body the
+    endpoint already consumed. A small ASGI middleware (`_RecordRequestBody`
+    in `main.py`) now keeps a capped copy of the body as it's read, and the
+    handler logs that.
 * **B3. The `OperationalError` handler probably never fires.** It catches
   `MySQLdb.OperationalError`, but SQLAlchemy raises
   `sqlalchemy.exc.OperationalError` (not a subclass).
