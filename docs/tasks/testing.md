@@ -404,6 +404,8 @@ each one's test flips when it's done.
   process. Later requests skip rename sources that earlier requests
   already "checked", so `/get_event_count` **undercounts**. The set also
   grows without bound and isn't thread-safe.
+  * **Fixed** (2026-10-09, `fix/b1-event-count-shared-set`): the set
+    defaults to `None` and is created per top-level call.
 * **B2. `global_exception_handler` logs the request body as `None`.** It
   sets `request = None` and then calls `request.body()` on it.
 * **B3. The `OperationalError` handler probably never fires.** It catches
