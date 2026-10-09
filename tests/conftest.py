@@ -126,6 +126,17 @@ def client(app):
         yield test_client
 
 
+@pytest.fixture
+def fake_backend(monkeypatch):
+    """Replaces the Google backend with a FakeBackend (tests/support/fake_auth.py)
+    for the login flow; set its `identity` before the callback."""
+    from provena.auth.backends import registry
+    from tests.support.fake_auth import FakeBackend
+    backend = FakeBackend()
+    monkeypatch.setitem(registry._backends, "google", backend)
+    return backend
+
+
 @pytest.fixture(autouse=True)
 def clean_db(test_db_engine):
     """Empties every table after each test, so tests don't see each other's

@@ -1,7 +1,10 @@
 # Testing plan for the `provena` server package
 
-Status: **T0 done** (infrastructure, smoke tests, B7 regression tests);
-T1–T4 next. The `toolbox` submodule (ProgSnapToolkit) has its own suite
+Status: **T0–T5 done** (2026-10-09): 397 tests pass and 41 are `xfail`
+for known bugs (B#), in about 21 s. Decisions D9–D18 are answered and
+reflected in the tests. T6–T8, and fixing the bugs in section 6, are later
+work (one PR per fix). D7 (moving helpers to the toolbox) comes after this
+commit. D17 needs a final call. The `toolbox` submodule (ProgSnapToolkit) has its own suite
 (`toolbox/tests`), which is out of scope except where section 4 suggests
 moving shared infrastructure there.
 
@@ -226,115 +229,141 @@ Test side, as built:
 
 The full run takes about 2 s.
 
-### T1: Pure unit tests (no DB)
+### T1: Pure unit tests (no DB) — done
 
-* `logging.py`: `get_canonical_string` (BOM, CRLF, NFC) and
-  `generate_code_hash`: canonicalize on/off, strip only in the hash, and
-  equivalent code from Windows and macOS clients hashing the same.
-  `add_codestate_ids`: only events with `Code` get an ID.
-* `auth/redirects.py`: the allowlist matrix (exact origin, default port,
-  `:*`, scheme mismatch, `javascript:`/`data:`/no host, userinfo tricks
-  like `http://127.0.0.1:80@evil.com`, hostname case, IPv6 loopback). Also
-  `append_query_params` / `append_fragment_params` with an existing query
-  or fragment.
-* `auth/roles.py`: `matches_role` (whitelist case-insensitivity, glob edge
-  cases like `x@sub.ncsu.edu` and `x@ncsu.edu.evil.com`, `open`) and
-  `_matches_any_key` (empty or None candidate, empty list).
-* `auth/config.py`: validators and the two startup warnings (`caplog`).
-* `auth/backends/google.py`: `callback` with Authlib stubbed. Cover the
-  success case, `email_verified: False`, missing `sub`/`email`, and the
-  Authlib exception path that returns 400.
+`tests/unit/`:
+* `test_code_hashing.py`: BOM (leading only), CRLF→LF (a lone CR is kept),
+  NFC; the hash strips outer whitespace only; Windows, macOS, BOM, and
+  trailing-newline variants hash the same; `add_codestate_ids` only touches
+  events with `Code`, overwrites a client `CodeStateID`, and agrees with the
+  hash `/get_event_count` uses.
+* `test_redirects.py`: the allowlist matrix (scheme, port, `:*`, userinfo
+  and fragment tricks, `javascript:`/`data:`, no scheme or host, hostname
+  case, IPv6 loopback) and query/fragment building. `xfail`: B12, B19.
+* `test_roles_and_config.py`: whitelist/pattern/open matching (case,
+  subdomains, suffix tricks); key matching (case, whitespace, empty keys);
+  config validators and both startup warnings. B13 `xfail`.
+* `test_google_backend.py`: Authlib stubbed. Covers the verified profile,
+  missing `email_verified` (accepted), `email_verified: False`, incomplete
+  profiles, Authlib errors → 400, and the `hd` hint passed to login.
+* `test_backend_registry.py`: building from config, caching, and errors.
 
-### T2: Auth and authorization
+### T2: Auth and authorization — done
 
-* **Tokens:** issue/resolve/revoke, only the hash is stored, unknown and
-  expired tokens resolve to None, `cli` expiry slides and `web` doesn't, and
-  the boundary at `expires_at == now`.
-* **Authorization matrix** (parametrized). Endpoints × credentials:
-  none, garbage bearer, expired token, student, non-matching email,
-  instructor token, instructor key, submit key, wrong key, and both headers
-  together. Each cell expects 200, 401 `reauth_required`, or 403
-  `insufficient_role`. A second axis covers role configs (`student: open`,
-  `instructor: open`). A route-coverage test walks `app.routes` and fails on
-  any route that's neither in the matrix nor explicitly listed as public.
-* **Login flow** with a `FakeBackend`:
-  * `/auth/login` allowlist enforcement and session contents.
-  * `/auth/google/callback`: first login creates `User` + `OAuthIdentity`;
-    a repeat login reuses them; same email with a new subject links to the
-    existing user; `web` delivers via fragment and `cli` via query; `state`
-    is echoed; a callback without `/auth/login` returns 400.
-  * Email case: Google returns `Prof@X.edu` once and `prof@x.edu` later. Is
-    that one user? The collation says yes, but the unique constraint and
-    the Python-side lookups may disagree.
-  * `/auth/logout` revokes only the caller's own token.
+`tests/auth/`:
+* `test_tokens.py`, with a controllable clock:
+  * only the hash is stored; expiry by client type; `cli` slides and `web`
+    doesn't; still valid at exactly `expires_at`; expired → None;
+  * expired rows aren't deleted (pinned);
+  * revoke affects only that token.
+* `test_authorization.py`:
+  * a 12-route × 13-credential matrix whose expected outcomes are spelled
+    out in `EXPECTED` (review this table);
+  * public routes;
+  * `student: open` and `instructor: open` across every route;
+  * a route-coverage test that fails when a route is added without an
+    entry. Cells awaiting B20 are `xfail` (`KNOWN_BUGS`).
+* `test_login_flow.py`, with `FakeBackend` (`tests/support/fake_auth.py`)
+  and an https `TestClient`, since the session cookie is Secure:
+  * allowlist enforcement;
+  * first login, repeat login, and a new subject with the same email;
+  * email case (one user, first spelling kept);
+  * a changed email at Google keeps the old one (pinned);
+  * `cli` delivers via query and `web` via fragment; the default is `web`;
+  * `state` is echoed;
+  * a callback without `/auth/login` → 400, and a replay → 400;
+  * a login with no role still gets a token (which then fails role checks);
+  * logout only revokes the caller's own token.
 
-### T3: Write endpoints
+### T3: Write endpoints — done
 
-* `/events`: happy path, with `ServerTimestamp` added and
-  `CodeStateID = hash(Code)`; an empty list; mixed column sets across
-  events; enums; the `LogResult` shape.
-* `/events` failure paths: a DB-level insert failure (e.g. an over-length
-  value under strict mode) goes to the malformed-event fallback with
-  `MISSING`; a validation failure goes to `validation_exception_handler`,
-  which writes `LoggingError` + `LinkLoggingError`; non-JSON and non-list
-  bodies.
-* `/submit` fan-out: {1, N} subjects × {1, N} sections. Check
-  `ParentEventID` links, `Score`/`ScoreDetails` on the parent only, and
-  `CodeStateID` per section; `SubjectIDs: []` is rejected.
-* Partial writes across separate commits. Force the second write to fail
-  and assert what's left in the DB:
-  * `_add_error_event` commits the `LoggingError` event, then the
-    `LinkLoggingError` row separately.
-  * `google_callback` commits the user and identity before `issue_token`
-    commits the token (this one is probably harmless).
-  * Also worth noting for T5: `resolve_token` commits on every
-    authenticated request.
-* `/get_event_count`: match by hash; suffix fallback (`a/b/x.py` vs
-  `x.py`, and `xx.py` must *not* match); rename chains including cycles;
-  `Submit` excluded; **repeat calls in one process** (bug B1).
+`tests/write/`:
+* `test_events.py`:
+  * Stored columns: server timestamps, `CodeStateID`s, raw `Code` kept, and
+    mixed column sets. Unknown fields are dropped; a missing event-specific
+    column is a warning.
+  * Over-length values go to the LoggingError fallback, and one bad event
+    sends the batch to per-event retries.
+  * Validation failures, non-JSON bodies, and non-list bodies are logged.
+  * Other routes return plain 422s.
+  * Duplicate `EventID`s (D13): retries, explicit nulls, a reused ID,
+    within-batch duplicates, and a case-only difference (a guard that must
+    keep passing).
+  * Pinned: any `SubjectID` accepted (Q-c).
+  * `xfail`: B14, B15, B21, B22.
+* `test_submit.py`:
+  * Fan-out for 1 or N subjects × 1 or N sections; parent/child links;
+    Score on the parent only; one shared ServerTimestamp.
+  * `SubjectIDs: []` → 422. An empty `CodeState` is accepted, and the
+    read side copes with it (D14). Omitting nullable fields → B23.
+  * DB failures return `success: false`, with no fallback.
+  * `xfail`: B5, B16, B23.
+* `test_event_count.py`:
+  * Matching: by hash (ignoring line endings), with the suffix fallback
+    (whole path component, exact path, case-insensitive). A hash match
+    suppresses the fallback.
+  * Scope: only the given subjects; Submit excluded.
+  * Renames: one rename, a chain, a cycle, and other subjects' renames
+    ignored.
+  * `xfail`: B1.
+  * Each test uses unique paths so B1 can't make results depend on order.
+* `test_error_handlers.py`: an unhandled exception → 500 plus a
+  LoggingError event. `xfail`: B2, B3, B25.
+* `tests/test_startup.py` (D9): a connection error at startup is
+  tolerated. `xfail`: B26.
+* Partial writes across separate commits (`_add_error_event`'s two
+  commits, `google_callback` then `issue_token`) aren't forced yet. With
+  B14, the link-table write *always* fails today, so the partial state is
+  the normal state; revisit after B14 is fixed.
 
-### T4: Read endpoints
+### T4: Read endpoints — done
 
-* `/read/assignments`, `/read/subjects`, `.../time_range`,
-  `.../codestate_sections` (only sections with a `FileSave`),
-  `/read/sessions/{id}/last_synced_order` (deliberately unauthenticated;
-  `-1` when empty), `/read/assignments/{id}/subjects`.
-* `/read/edits` and `/read/edits_in_range`: ordering by
-  `(ClientTimestamp, Order)`; nulls stripped; rename history stitched
-  across `FileRename`; the `last_codestate_id` cutoff, including the
-  `"\u0000"` same-timestamp trick (check how MySQL compares it).
-* `mapping.py` via `/read/update_mapping_table` and
-  `.../code_state_sections`: latest-submission ranking (ties!), suffix
-  matching, incremental updates via `LastValidTimestamp`, and upsert.
+`tests/read/`:
+* `test_listing.py`:
+  * assignments and subjects: distinct, nulls skipped, case variants
+    collapse (Q-b);
+  * time range: string comparison pinned, unknown subject → nulls;
+  * codestate sections need a `File.Save`;
+  * per-assignment stats: last submission and max score, child events
+    without scores ignored. `xfail`: B8;
+  * `last_synced_order`.
+* `test_edits.py`:
+  * ordering by timestamp and then `Order`; nulls stripped; events without
+    a `ClientTimestamp` excluded;
+  * renames: single, chain, the old name reused later, the new name used
+    earlier, other subjects ignored;
+  * the `last_codestate_id` cutoff, including same-timestamp events (the
+    `"\u0000"` trick works under MySQL), across a rename, and an unknown
+    ID;
+  * `edits_in_range` bounds;
+  * `xfail`: B10.
+* `test_assignment_mapping.py`:
+  * Matching: the basename, a whole path component, only the subject's own
+    files, multi-file submissions, only the latest submission, and a file
+    in several assignments.
+  * Updates are idempotent. A resubmission moves `LastValidTimestamp`.
+  * Only the latest submission is mapped, but rows from earlier updates
+    are kept when a different file is resubmitted (D16).
+  * Pinned: case variants collapse into one mapping (see the B7 note).
+  * `update_mapping_table` returns `null`.
+  * `xfail`: B9, B17.
 
-### T5: Concurrency and races
+### T5: Concurrency and races — done
 
-See section 7 for the reasoning. Concretely:
-* A `live_server` fixture runs real uvicorn in a background thread on a
-  free port. Tests hit it with `httpx.AsyncClient` + `asyncio.gather`, so
-  requests really overlap in FastAPI's threadpool and the SQLAlchemy
-  connection pools. `TestClient` largely serializes requests and won't
-  reproduce these problems.
-* Cases:
-  * **Overlapping `/events` batches** for the same and for different
-    sessions: no lost rows, and `last_synced_order` is the true max.
-  * **Retried batches.** The main table has no uniqueness on `EventID`,
-    so is a client retry (a timeout after the server already committed)
-    duplicated? Pin current behavior, then decide (D-pending).
-  * **First-login race:** two callbacks for the same brand-new user at
-    once collide on `auth_users.email UNIQUE`. Is a 500 acceptable, or
-    should the second one retry or fetch the existing user?
-  * **Concurrent `/read/update_mapping_table`** and `code_state_sections`
-    (each call triggers an update): no deadlock, no duplicate mapping rows.
-  * **Pool exhaustion:** `pool_size: 10`, `max_overflow: 0`,
-    `pool_timeout: 2` against FastAPI's 40 worker threads. What does a
-    client see when the pool runs out, and does the error handler then
-    deadlock trying to log the error through the same exhausted pool?
-  * **Process-wide mutable state:** bug B1's shared default `set()` is
-    also a thread-safety bug, and the `_backends` cache is filled lazily
-    without a lock (harmless double-init, but worth a note).
-* Marked `concurrency` and run by default. They're seconds, not minutes.
-  Throughput and latency belong to Locust (`locustfile.py`), not pytest.
+`tests/concurrency/`: a session-scoped `live_server` fixture (uvicorn in a
+thread, same app object) plus `httpx.AsyncClient` + `asyncio.gather`.
+* 20 overlapping `/events` batches across 4 sessions: no lost or
+  duplicated rows, correct `last_synced_order`.
+* 10 concurrent `update_mapping_table` calls: all 200, no duplicate rows,
+  no deadlocks.
+* Five simultaneous first logins for one new user: one user, all succeed.
+  That only holds because of B18 (see D17).
+* Pool exhaustion (`slow`): 12 requests each holding a write connection for
+  3 s against a pool of 10 with a 2 s timeout gives 10× 200 and 2 failures
+  (500 today; 503 after B25), with no deadlock. B25 itself is checked
+  quickly in `tests/write/test_error_handlers.py`.
+* Not tested: B1's thread-safety (the B1 fix covers it), and retried
+  batches beyond D13's sequential test.
 
 ### T6: Real client payloads (later, D5)
 
@@ -360,9 +389,15 @@ cheap option is a temporary, opt-in request-body dump in a dev server.
 
 ---
 
-## 6. Suspected bugs found while reading (tests should catch these)
+## 6. Bugs found (each has an `xfail(strict=True)` test)
 
 IDs are stable so tests and PRs can reference them.
+
+Status (2026-10-09): B1–B3, B5, B8–B10, B12–B17, B19–B23, B25, and B26 have
+`xfail` tests. B4 isn't a bug. B6 is cosmetic. B7 is fixed. B24 was withdrawn. B18 is a
+performance and design issue, shown by the concurrency tests. B19–B26 are
+behavior changes decided in section 8 (D9–D18), tracked as bugs so that
+each one's test flips when it's done.
 
 * **B1. Mutable default arg in `get_event_count_for_codestates`.** The
   default `set()` is shared across all requests for the life of the
@@ -374,8 +409,9 @@ IDs are stable so tests and PRs can reference them.
 * **B3. The `OperationalError` handler probably never fires.** It catches
   `MySQLdb.OperationalError`, but SQLAlchemy raises
   `sqlalchemy.exc.OperationalError` (not a subclass).
-* **B4. The `/events` branch of `validation_exception_handler` may never
-  run.** It depends on `request.scope["route"]` being set. To confirm.
+* **B4. ~~The `/events` branch of `validation_exception_handler` may never
+  run.~~** Not a bug: `request.scope["route"]` is set, and the branch runs
+  (`tests/write/test_events.py`).
 * **B5. `log_submit`'s `logger.info(f"...", events)`** passes an extra
   argument with no `%s`, which produces a logging-format error.
 * **B6. `mapping.py` has a stray `from select import select`** (the stdlib
@@ -402,19 +438,85 @@ IDs are stable so tests and PRs can reference them.
     SHA-256 of the path (`CodeStateSectionHash`), so uniqueness is exact.
     `provena/db/migrations.py` upgrades existing tables in place: it adds the
     hash and `id` columns and swaps the old prefix key for the hash key.
-    Verified on throwaway DBs (fresh and legacy): identical resulting DDL,
-    existing rows kept, re-running is a no-op, and two paths sharing a
-    260-char prefix map to separate rows. T0 should turn that check into
-    regression tests (fresh schema, legacy migration, migration idempotence).
-  * Behavior change to note: uniqueness of the path is now exact (case- and
-    accent-*sensitive*), while the rest of the system compares paths under
-    the `ai_ci` collation.
+    Regression tests: `tests/test_app_tables.py`.
+  * Behavior change, smaller than it looks: the key is now exact (case- and
+    accent-*sensitive*), but `update_mapping_table`'s `SELECT DISTINCT`
+    already collapses case variants under the `ai_ci` collation before
+    inserting, so only direct inserts see the difference.
   * Still open: startup (`logging.py`, and `init_app_tables` in `main.py`)
     still swallows schema-init errors, so a future DDL failure would again
     leave a half-created DB silently (D9).
   * Near miss: `codestates`' unique key `(CodeStateID, CodeStateSection)` is
     (255 + 512) × 4 = 3068 bytes, just under the limit. Widening either
     column would hit B7 again there.
+
+* **B8. `/read/assignments/{id}/subjects` returns 500 when a subject's
+  submissions have no `Score`.** `MaxScore` is a required `float` in the
+  response model, but `Score` is nullable on `/submit`.
+* **B9. A resubmission doesn't update the mapping's `CodeStateID`.** The
+  upsert only sets `LastValidTimestamp`, so `CodeStateID` keeps the first
+  submission's code. The model documents it as "the last submission".
+* **B10. The `/read/edits` cutoff searches every subject's events.**
+  `_get_end_client_timestamp` looks up `last_codestate_id` without filtering
+  on `subject_id`. Identical code from another student (e.g. unmodified
+  starter code) can set the cutoff.
+* **B12. A non-numeric port in `client_redirect_uri` causes a 500.**
+  `urlsplit(...).port` raises `ValueError` when an exact-port allowlist
+  entry is checked. The request isn't let through; it just fails as a 500
+  instead of a 400.
+* **B13. A non-ASCII `X-API-Key` causes a 500.** `secrets.compare_digest`
+  raises `TypeError` on non-ASCII `str`.
+* **B14. Error details are never stored.** *Significant.*
+  `_add_error_event` calls `add_link_table_entry('linkloggingerror')`. The
+  toolbox's case-insensitive table lookup is broken for quoted names: SQLAlchemy's
+  `quoted_name.lower()` returns the name unchanged, so the map is identity. The
+  lookup fails and is logged and swallowed. Every `LoggingError` event in
+  production has no `LinkLoggingError` row, so the error text and request
+  body are lost. Two fixes are possible: the one-line provena fix
+  (`'LinkLoggingError'`), and the real fix in the toolbox's `get_table`
+  (`str(name).lower()`).
+* **B15. A body that isn't valid JSON is logged without authentication.**
+  JSON decoding fails before dependencies run, so `/events`' validation
+  handler writes a `LoggingError` event (plus a link row, once B14 is
+  fixed) for anonymous requests. Valid JSON that fails the model is
+  checked *after* auth and gets a 401, so anonymous callers can't plant
+  events, only error rows: a spam/DoS vector. Fix: check credentials in the
+  handler before logging.
+* **B16. Multi-subject `/submit` reuses one `EventID`.** Each subject's
+  parent Submit event is a copy of the same dict, so they share an
+  `EventID`, and every subject's children point at that same
+  `ParentEventID`.
+* **B17. Late-synced logs never get mapped.** `update_mapping_table` only
+  considers submissions newer than the newest mapping (across all
+  subjects). Take a submission whose logs weren't synced yet: it maps to
+  nothing. If any later submission is then mapped, it's never retried, even
+  after the logs arrive.
+* **B18. Async handlers do blocking DB work on the event loop.**
+  `google_callback` and the three exception handlers in `main.py` are
+  `async def` but make synchronous DB calls. While they run, the whole
+  server stalls. Under pool exhaustion, each error handler can block every
+  request for up to `pool_timeout` (2 s) waiting for a connection. The same
+  thing currently *prevents* the first-login race (D17). Fix: make them
+  plain `def`, or run the DB work in a threadpool. That fix would expose
+  the race.
+
+* **B19 (D10).** An explicit default port (`https://host:443`) should match
+  an allowlist entry without a port, and vice versa.
+* **B20 (D11).** A valid submit key on a student or instructor route should
+  get 403 `insufficient_role`, not 401.
+* **B21 (D12).** `/events` should overwrite a client-supplied
+  `ServerTimestamp` and say so in the response's warnings.
+* **B22 (D13).** Duplicate `EventID`s: see D13 for the intended behavior.
+* **B23 (D15).** `/submit`'s `Score`, `ScoreDetails`, `TermID` and
+  `CourseID` should default to `None`.
+* **B24.** Withdrawn: see D16. Only the latest submission is meant to be
+  mapped.
+* **B25 (D18).** Pool exhaustion (`sqlalchemy.exc.TimeoutError`) should be
+  a 503 with `Retry-After`.
+* **B26 (D9).** A schema/DDL error at startup should stop the server. A
+  connection error should still be tolerated.
+
+(B11 was skipped: it became D15.)
 
 Open behavior questions (not clearly bugs):
 * **Q-a.** `/events` returns **200** for malformed input after logging it as
@@ -495,9 +597,9 @@ For each sub-task:
   2026-10-09
 * **D6** (scope): Node bridge? **Out of scope**, since it isn't currently
   used. 2026-10-09
-* **D7** (infra): Shared test helpers in the toolbox? *Pending.* Proposal:
-  build them in `tests/support/` first, then move them to
-  `progsnap2.testing` once stable (section 4).
+* **D7** (infra): Shared test helpers in the toolbox? **Yes, after the T1–T5
+  commit:** move `tests/support/databases.py` and `progsnap2_events.py` to
+  `progsnap2.testing`. 2026-10-09
 * **D8** (B7): How to fix `LinkAssignmentMap`'s too-long unique key?
   **Remove it from the ProgSnap2 spec and define it as a hand-written
   SQLAlchemy model** (like the auth tables), with a unique key on a hash of
@@ -506,10 +608,78 @@ For each sub-task:
   grow SQL-specific features. Considered and rejected: a prefix index (lossy
   uniqueness; production's longest path is already 241 chars), and narrowing
   the ID columns. 2026-10-09
-* **D9** (B7 follow-up): Should startup **fail loudly** if schema
-  initialization fails, instead of logging and serving against a partial
-  schema? *Pending.* The trade-off: a DB that's briefly unreachable at boot
-  would then stop the service from starting, instead of letting it limp
-  along until the DB is back (check `provena.service`'s `Restart=` policy).
-  Proposal: fail loudly on DDL errors, but keep tolerating connection
-  errors.
+* **D9** (B7 follow-up): Fail loudly if schema initialization fails?
+  **Yes for schema/DDL errors; keep tolerating connection errors**
+  (`provena.service` has `Restart=always`). Covers both the ProgSnap2 tables
+  (`logging.py`) and `init_app_tables`. Tracked as B26; only the
+  `init_app_tables` side is tested (`tests/test_startup.py`). 2026-10-09
+* **D10** (T1): Should an explicit default port match an allowlist entry
+  without a port? **Yes**, in both directions, as `redirects.py`'s
+  docstring says. → B19. 2026-10-09
+* **D11** (T2): A valid submit key on a student or instructor route? **403
+  `insufficient_role`**, not 401. → B20. 2026-10-09
+* **D12** (T3): A client-supplied `ServerTimestamp`? **The server
+  overwrites it, with a warning in the response.** → B21. 2026-10-09
+* **D13** (T3/T5): Duplicate `EventID`s? EventIDs should be unique and the
+  client should guarantee that, but never lose data if a duplicate turns up
+  anyway. → B22. 2026-10-09
+  1. A unique key on `EventID`. This likely needs a toolbox change, since
+     the toolbox builds the main table from the spec.
+  2. On a duplicate, compare the incoming event with the stored row:
+     * an exact match is a retry: skip it, with a warning;
+     * otherwise, store it under a new unique `EventID`, with a warning.
+
+  Keep this logic in its own function. Design notes for the comparison:
+  * **Avoid false matches.** A false match silently drops data, so it's the
+    only dangerous direction; a false mismatch just stores an extra copy.
+    * Compare in Python, on the values read back. Not in SQL, where the
+      `ai_ci` collation equates `a`/`A` and `é`/`e`.
+    * Ignore server-assigned columns (`ServerTimestamp`) and derived ones
+      (`CodeStateID`, which follows from `Code`).
+    * Treat a missing key and an explicit null as equal, since the model
+      drops `None` before storing.
+    * Floats (`Score`) and other round-tripped values may differ slightly.
+      That direction is safe, but worth a test once implemented.
+  * **Duplicates within one batch** need the same handling as against the
+    DB.
+  * **Concurrent retries** of the same batch could both pass a
+    check-then-insert. The unique key makes the second insert fail, and
+    that failure must route into the comparison, not into the
+    malformed-event fallback.
+  * Tests: `tests/write/test_events.py`, "Duplicate EventIDs".
+    `test_difference_only_in_case_is_not_a_match` passes today and guards
+    the fix.
+* **D14** (T3): `/submit` with `CodeState: []`? **Allowed.** Some projects
+  have no files; the autograder sends e.g. Score 0. Checked against the
+  read side (stats, mapping, event count) by
+  `test_empty_submission_works_with_the_read_side`, and nothing breaks.
+  2026-10-09
+* **D15** (T3): `/submit`'s nullable fields? **Default them to `None`.** Per
+  the spec they aren't required columns. → B23. 2026-10-09
+* **D16** (T4): Which submissions get mapped, and are stale rows deleted?
+  * **Only the latest submission** per subject and assignment is mapped.
+    Submit is assumed to come only from real, graded submissions, so the
+    latest one is the one that matters. This may change later.
+  * **Stale rows aren't deleted.** Updates are incremental, so a file
+    mapped by an earlier update stays mapped after a later submission of
+    different files. That's a known quirk, but deleting those rows would
+    make files vanish from an assignment's history after a resubmission.
+    A more robust model (e.g. viewing by individual submission rather
+    than by assignment) is possible future work.
+  * Briefly logged as B24 and then withdrawn. 2026-10-09
+* **D17** (T5): The first-login race. *Pending; more context below.*
+  * When it can happen: the same person's very first login, twice at once,
+    e.g. VS Code and the web app finishing Google's redirect within
+    milliseconds of each other. Today it can't happen at all, because the
+    callback blocks the event loop (B18) and production runs one worker.
+    It becomes possible once B18 is fixed or there are more workers.
+  * What happens then: the second request gets a 500. The user retries and
+    it works, since the user now exists.
+  * Making both succeed is cheap: catch the `IntegrityError` from the user
+    insert, roll back, and re-select the user by email. The same applies
+    to the identity insert, which has its own unique key on
+    `(provider, subject)`.
+  * Recommendation: do that fix together with B18, since it's the fix that
+    exposes the race.
+* **D18** (T5): Pool exhaustion? **503 with `Retry-After`.** → B25. Also
+  check what the extension does on a 503. 2026-10-09

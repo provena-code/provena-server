@@ -75,3 +75,25 @@ def seed_events(events: list[dict[str, Any]]) -> LogResult:
         result = writer.add_events(events)
     assert result.success, f"seed_events failed: {result.errors}"
     return result
+
+
+def main_table_rows(order_by: str = "Order", **filters: Any) -> list[dict[str, Any]]:
+    """Rows of the ProgSnap2 main table as dicts (NULL columns dropped),
+    filtered by column equality."""
+    return _table_rows(db_writer_factory.table_manager.main_table, order_by, filters)
+
+
+def logging_error_rows() -> list[dict[str, Any]]:
+    """LinkLoggingError rows: the messages behind LoggingError events."""
+    return _table_rows(db_writer_factory.table_manager.link_tables["LinkLoggingError"], None, {})
+
+
+def _table_rows(table, order_by: str | None, filters: dict[str, Any]) -> list[dict[str, Any]]:
+    statement = select(table)
+    for column, value in filters.items():
+        statement = statement.where(table.c[column] == value)
+    if order_by:
+        statement = statement.order_by(table.c[order_by])
+    with db_writer_factory.engine.connect() as conn:
+        rows = conn.execute(statement).mappings().all()
+    return [{k: v for k, v in row.items() if v is not None} for row in rows]

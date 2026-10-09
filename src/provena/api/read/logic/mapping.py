@@ -27,6 +27,14 @@ def update_mapping_table(session: Session, main_table: Table, mapping_table: Tab
     This function updates the mapping table with the CodeStateSections (files) that were submitted
     for each Subject/Assignment pair. Note that a file may be used in multiple Assignments.
     It should be run periodically to keep the mapping table up to date with new submissions and renames.
+
+    Only the latest submission per Subject/Assignment is mapped (that's the
+    graded one). Rows are never deleted, though: an update is incremental,
+    so files mapped by an earlier update stay mapped after a later
+    submission of different files. That's intentional for now (deleting
+    them would make files vanish from an assignment's history); a
+    per-submission view may replace this eventually. See D16 in
+    docs/tasks/testing.md.
     """
 
     logger.info("Updating mapping table with new submissions...")
