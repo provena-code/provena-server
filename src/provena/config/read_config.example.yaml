@@ -1,0 +1,7 @@
+# Copy to read_config.yaml. Must point at the same database as write_config.yaml.
+# Provena officially supports MySQL only (see CLAUDE.md).
+root_path: ./test_data/
+sqlalchemy_url: mysql://provena:CHANGE-ME@localhost/provena_CHANGE-ME
+echo: false
+optimize_codestate_ids: false
+metadata_table_name: metadata

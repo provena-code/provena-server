@@ -1,7 +1,7 @@
 database_config:
   root_path: ./test_data/
-  sqlalchemy_url: sqlite:///test_data/example.db
-  # sqlalchemy_url: mysql://provena:provena@localhost/provena_csc111_s26
+  # Provena officially supports MySQL only (see CLAUDE.md).
+  sqlalchemy_url: mysql://provena:CHANGE-ME@localhost/provena_CHANGE-ME
   echo: false
   optimize_codestate_ids: true
   indexed_columns:

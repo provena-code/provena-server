@@ -1,8 +1,11 @@
 .conda
 test_data/
 __pycache__
-src/provena/*config.yaml
+src/provena/config/*config.yaml
 openapi.json
 app.out
 uvicorn.pid
 venv
+tests/test_config.yaml
+.coverage
+htmlcov/

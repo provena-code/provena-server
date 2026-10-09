@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from provena.auth.models import Token, User
-from provena.configs import auth_config
+from provena.config.configs import auth_config
 
 CLI = "cli"
 WEB = "web"

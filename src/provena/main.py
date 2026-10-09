@@ -6,16 +6,18 @@ logger = logging.getLogger(__name__)
 import importlib
 import os
 import pkgutil
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
-from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from provena.api.logging.logging import add_error_event, add_malformatted_events
-from provena.configs import api_config, auth_config
+from provena.auth.roles import api_key_header, require_student_role
+from provena.config.configs import api_config, auth_config
+from provena.db.base import SessionLocal, init_app_tables
 import provena.api
 
 # Set python's logging level to uvicorns if uvicorn is being used
@@ -53,12 +55,33 @@ app.add_middleware(
     https_only=not _allow_insecure_cookies,
 )
 
+# Create/upgrade the hand-written (non-ProgSnap2) app tables -- see
+# provena.db.base. The ProgSnap2 logging tables are created separately, when
+# provena.api.logging.logging is imported above.
+try:
+    init_app_tables()
+except Exception as e:
+    logger.error(f"Error initializing app tables: {e}")
+
 for module_info in pkgutil.walk_packages(provena.api.__path__, provena.api.__name__ + "."):
     # logger.info(f"Loading API module: {module_info.name}")
     module = importlib.import_module(module_info.name)
     if hasattr(module, "router"):
         app.include_router(module.router)
         # logger.info(f"Included router from {module_info.name}")
+
+
+def _check_events_credentials(request: Request) -> None:
+    """
+    Runs /events' own credential check (require_student_role) by hand.
+    Raises HTTPException (401/403) if the caller isn't allowed to log events.
+    """
+    with SessionLocal() as db:
+        require_student_role(
+            authorization=request.headers.get("authorization"),
+            api_key=request.headers.get(api_key_header.model.name),
+            db=db,
+        )
 
 
 @app.exception_handler(RequestValidationError)
@@ -73,6 +96,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     if route:
         path = route.path if route else request.url.path
         if path == "/events":
+            # A body that isn't valid JSON fails validation before /events'
+            # auth dependency has run, so check credentials here before
+            # writing anything to the DB (B15).
+            try:
+                _check_events_credentials(request)
+            except HTTPException as e:
+                return await http_exception_handler(request, e)
+
             # Get the body of the request
             try:
                 body = await request.json()

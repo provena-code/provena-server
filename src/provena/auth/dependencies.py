@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
-from provena.auth.db import SessionLocal
+from provena.db.base import SessionLocal
 from provena.auth.models import Token, User
 from provena.auth.tokens import resolve_token
 

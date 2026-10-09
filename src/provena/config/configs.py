@@ -19,7 +19,13 @@ from progsnap2.spec.gen.gen_client import generate_ts_methods
 from provena.auth.config import AuthConfig
 
 __file_dir = os.path.dirname(os.path.abspath(__file__))
-__src_dir = os.path.join(__file_dir, "..")
+__src_dir = os.path.join(__file_dir, "..", "..")
+
+# Directory holding write_config.yaml, read_config.yaml and auth_config.yaml.
+# Defaults to this package's directory; set PROVENA_CONFIG_DIR to load them
+# from elsewhere (e.g. the test suite points this at throwaway configs for a
+# provena_test_* database). Must be set before this module is first imported.
+config_dir = os.environ.get("PROVENA_CONFIG_DIR") or __file_dir
 
 spec = ProgSnap2Spec.from_yaml(os.path.join(__src_dir, "provena/progsnap2-provena.yaml"))
 
@@ -28,6 +34,6 @@ MainTableEvent = data_model_gen.MainTableEvent
 AnyAdditionalColumns = data_model_gen.AnyAdditionalColumns
 SubmitEvent = data_model_gen.main_event_additional_columns.get("Submit")
 
-api_config = PS2APIConfig.from_yaml(os.path.join(__src_dir, "provena/write_config.yaml"), spec)
-read_config = PS2DataConfig.from_yaml(os.path.join(__src_dir, "provena/read_config.yaml"), spec)
-auth_config = AuthConfig.from_yaml(os.path.join(__src_dir, "provena/auth_config.yaml"))
+api_config = PS2APIConfig.from_yaml(os.path.join(config_dir, "write_config.yaml"), spec)
+read_config = PS2DataConfig.from_yaml(os.path.join(config_dir, "read_config.yaml"), spec)
+auth_config = AuthConfig.from_yaml(os.path.join(config_dir, "auth_config.yaml"))

@@ -1,0 +1,16 @@
+# Copy to tests/test_config.yaml (gitignored) and fill in the password.
+# See docs/tasks/testing.md, section 3.
+
+# MySQL server URL *without* a database name. The suite creates its own
+# provena_test_<random> database here for each run and drops it afterwards.
+# The user needs CREATE/DROP on provena_test_* databases. The environment
+# variable PROVENA_TEST_MYSQL_URL overrides this (e.g. for CI).
+mysql_server_url: mysql://provena:CHANGE-ME@localhost
+
+# Prefix for the throwaway database's name. Must start with "provena_test_",
+# so the suite can never point at a real database.
+database_prefix: provena_test_
+
+# true = keep the database after the run, to inspect it. Its name is printed
+# at the end of the run; drop it by hand afterwards.
+keep_database: false

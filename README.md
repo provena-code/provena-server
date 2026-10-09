@@ -24,7 +24,7 @@ It also connects with two other client repos:
 * `write_config.yaml`: Configuration for creating writing to the database (SQLite or MySQL). See `toolbox/README.md` for details. The read and write configuration files should match (they exist separately because the Toolkit this is built on handles logging and reading/analytics separately).
 * * **Note**: This should be created using `write_config.example.yaml` if it does not already exist.
 * `progsnap2-provena.yaml`: A yaml definition of the ProgSnap2 logging format used by Provena, which differs somewhat from the original.
-* `auth_config.yaml`: Configuration for authentication. See the Authentication section below, and `docs/plans/complete/auth.md` for full design details.
+* `auth_config.yaml`: Configuration for authentication. See the Authentication section below, and `docs/tasks/complete/auth.md` for full design details.
 * * **Note**: This should be created using `auth_config.example.yaml` if it does not already exist.
 * `auth`: Authentication -- OAuth login backends, and the User/OAuthIdentity/Token database models (separate from the ProgSnap2 logging schema above).
 
