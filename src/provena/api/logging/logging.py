@@ -22,7 +22,7 @@ from progsnap2.spec.spec_definition import PS2Versions, ProgSnap2Spec, Requireme
 from progsnap2.spec.gen.gen_client import generate_ts_methods
 from progsnap2.spec.enums import MainTableColumns as Cols, EventType
 
-from provena.configs import api_config, spec, MainTableEvent
+from provena.config.configs import api_config, spec, MainTableEvent
 from provena.auth.roles import require_student_role, require_submit_permission
 
 db_writer_factory: SQLIOFactory = IOFactory.create_factory(api_config.database_config, ps2_spec=spec)

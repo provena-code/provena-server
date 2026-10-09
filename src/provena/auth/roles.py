@@ -10,7 +10,7 @@ from provena.auth.config import RoleConfig
 from provena.auth.dependencies import _reauth_required, get_auth_db
 from provena.auth.models import User
 from provena.auth.tokens import resolve_token
-from provena.configs import auth_config
+from provena.config.configs import auth_config
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 

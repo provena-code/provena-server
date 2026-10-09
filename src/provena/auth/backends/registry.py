@@ -1,6 +1,6 @@
 from provena.auth.backends.base import AuthBackend
 from provena.auth.backends.google import GoogleOAuthBackend
-from provena.configs import auth_config
+from provena.config.configs import auth_config
 
 _backends: dict[str, AuthBackend] = {}
 

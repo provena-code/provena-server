@@ -1,5 +1,5 @@
 # Copy this file to auth_config.yaml and fill in real values.
-# auth_config.yaml is gitignored (see src/provena/*config.yaml in .gitignore).
+# auth_config.yaml is gitignored (see src/provena/config/*config.yaml in .gitignore).
 
 # Name of the single auth backend this server uses. Currently only "google"
 # is implemented.

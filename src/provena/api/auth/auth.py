@@ -14,7 +14,7 @@ from provena.auth.dependencies import get_auth_db, get_current_token
 from provena.auth.models import OAuthIdentity, Token, User
 from provena.auth.redirects import append_fragment_params, append_query_params, is_allowed_redirect_uri
 from provena.auth.tokens import issue_token, revoke_token
-from provena.configs import auth_config
+from provena.config.configs import auth_config
 
 # Create the auth tables if they don't already exist. These are hand-written
 # SQLAlchemy models (see provena.auth.models), not generated from the

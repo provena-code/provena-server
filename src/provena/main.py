@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from provena.api.logging.logging import add_error_event, add_malformatted_events
-from provena.configs import api_config, auth_config
+from provena.config.configs import api_config, auth_config
 import provena.api
 
 # Set python's logging level to uvicorns if uvicorn is being used

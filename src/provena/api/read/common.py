@@ -1,5 +1,5 @@
 from progsnap2.database.writer.db_writer_factory import IOFactory, SQLIOFactory
-from provena.configs import read_config
+from provena.config.configs import read_config
 
 from provena.auth.roles import require_instructor_role
 

@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-from provena.configs import api_config
+from provena.config.configs import api_config
 
 # Auth tables are hand-written SQLAlchemy models (see models.py), not
 # generated from the ProgSnap2 spec like the logging tables. They live in the
