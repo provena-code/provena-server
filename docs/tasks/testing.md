@@ -464,6 +464,9 @@ each one's test flips when it's done.
   `urlsplit(...).port` raises `ValueError` when an exact-port allowlist
   entry is checked. The request isn't let through; it just fails as a 500
   instead of a 400.
+  * **Fixed** (2026-10-09, `fix/b12-b19-redirect-ports`): a malformed port
+    (in the URI or an allowlist entry) never matches, so /auth/login returns
+    400.
 * **B13. A non-ASCII `X-API-Key` causes a 500.** `secrets.compare_digest`
   raises `TypeError` on non-ASCII `str`.
 * **B14. Error details are never stored.** *Significant.*
@@ -511,6 +514,8 @@ each one's test flips when it's done.
 
 * **B19 (D10).** An explicit default port (`https://host:443`) should match
   an allowlist entry without a port, and vice versa.
+  * **Fixed** (2026-10-09, `fix/b12-b19-redirect-ports`): ports are compared
+    after filling in the scheme's default (`_effective_port`).
 * **B20 (D11).** A valid submit key on a student or instructor route should
   get 403 `insufficient_role`, not 401.
 * **B21 (D12).** `/events` should overwrite a client-supplied

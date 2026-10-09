@@ -53,13 +53,13 @@ def test_empty_allowlist_rejects_everything():
     assert not is_allowed_redirect_uri("http://127.0.0.1:5000/", [])
 
 
-@pytest.mark.xfail(reason="B19 (D10): an explicit default port should be the same as no port, as the docstring says")
 @pytest.mark.parametrize("uri, entry", [
     ("https://webapp.test:443/cb", "https://webapp.test"),
     ("http://127.0.0.1:80/cb", "http://127.0.0.1"),
     ("https://webapp.test/cb", "https://webapp.test:443"),
 ])
 def test_default_port_is_the_same_as_no_port(uri, entry):
+    # D10
     assert is_allowed_redirect_uri(uri, [entry])
 
 
@@ -67,9 +67,17 @@ def test_default_port_of_the_other_scheme_still_mismatches():
     assert not is_allowed_redirect_uri("https://webapp.test:80/cb", ["https://webapp.test"])
 
 
-@pytest.mark.xfail(raises=ValueError, reason="B12: a non-numeric port raises instead of being rejected (500 on /auth/login)")
-def test_malformed_port_is_rejected_not_raised():
-    assert not is_allowed_redirect_uri("https://webapp.test:abc/cb", ALLOWLIST)
+@pytest.mark.parametrize("uri", [
+    "https://webapp.test:abc/cb",    # B12: used to raise ValueError (a 500)
+    "https://exact.test:99999/cb",   # out of range
+    "http://127.0.0.1:abc/cb",       # even on a ":*" host
+])
+def test_malformed_port_is_rejected_not_raised(uri):
+    assert not is_allowed_redirect_uri(uri, ALLOWLIST)
+
+
+def test_malformed_allowlist_entry_matches_nothing():
+    assert not is_allowed_redirect_uri("https://webapp.test/cb", ["https://webapp.test:abc"])
 
 
 # --- URL building -------------------------------------------------------------
