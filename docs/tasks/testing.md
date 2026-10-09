@@ -528,10 +528,13 @@ each one's test flips when it's done.
 
 Open behavior questions (not clearly bugs):
 * **Q-a.** `/events` returns **200** for malformed input after logging it as
-  an error. Is that intentional, so the client drops the batch instead of
-  retrying?
+  an error. **Answered: intentional**, so the client drops the batch instead
+  of retrying it forever. 2026-10-09
 * **Q-b.** IDs compare case- and accent-insensitively under MySQL's
-  collation. Is that desired for `SubjectID`/`AssignmentID`/paths?
+  collation. **Answered for `SubjectID`: desired**, since SubjectIDs are
+  currently emails (documented in `CLAUDE.md`, including the caveat for new
+  auth backends). For paths and the rest of the repo it's open:
+  provena-code/provena-server#22. 2026-10-09
 * **Q-c.** `SubjectID` isn't tied to the authenticated identity. This is a
   documented non-goal, so tests pin it as current behavior.
 
@@ -755,6 +758,25 @@ overview. Update it when a batch of work lands.
 * The toolbox side of B14 (`get_table`'s case-insensitive lookup works on
   readers but not writers): CSSPLICE/ProgSnapToolkit#1. Provena is
   unaffected now.
+* `ServerTimestamp`s are the server's *local* time, compared as strings,
+  so DST changes can reorder them: a comment on #18. The simplest fix is to
+  run production in UTC.
+* Case/accent-insensitive comparisons beyond `SubjectID`: #22.
+* T6, real client payloads: #23.
+* Client follow-ups for the new 503 (and nullable `MaxScore`):
+  provena-code/provena-vscode#2 and provena-code/provena-client#2.
+
+### Other answers (2026-10-09)
+
+* **Production and the B7 migration:** not deployed yet; the DB is backed
+  up. If the production table name is lowercase (Linux is
+  case-sensitive), expect a leftover stale `linkassignmentmap` table, or
+  with #15 a failed start. Handle it at deploy time.
+* **Behaviors pinned as acceptable:** expired tokens aren't deleted; an
+  email changed at Google keeps the old address for role checks; a login
+  with no role still gets a token. All confirmed fine.
+* **CI (T8):** not needed for now (solo project).
+* **Cleanup:** keep the merged branches and the second worktree for now.
 
 ### Environment notes
 
