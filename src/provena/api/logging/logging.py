@@ -20,7 +20,7 @@ from progsnap2.database.writer.db_writer_factory import IOFactory, SQLIOFactory
 from progsnap2.spec.enums import CoreTables
 from progsnap2.spec.spec_definition import PS2Versions, ProgSnap2Spec, Requirement
 from progsnap2.spec.gen.gen_client import generate_ts_methods
-from progsnap2.spec.enums import MainTableColumns as Cols, EventType
+from progsnap2.spec.enums import MainTableColumns as Cols, EventType, LinkTableNames
 
 from provena.config.configs import api_config, spec, MainTableEvent
 from provena.auth.roles import require_student_role, require_submit_permission
@@ -182,7 +182,7 @@ def _add_error_event(error: str, request: str, writer: SQLWriter) -> LogResult:
 
     try:
         writer.add_link_table_entry(
-            'linkloggingerror',
+            LinkTableNames.LinkLoggingError,
             {
                 Cols.LoggingErrorID: error_id,
                 'Error': error,
