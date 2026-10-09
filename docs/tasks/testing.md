@@ -1,12 +1,11 @@
 # Testing plan for the `provena` server package
 
-Status: **T0–T5 done** (2026-10-09): 397 tests pass and 41 are `xfail`
-for known bugs (B#), in about 21 s. Decisions D9–D18 are answered and
-reflected in the tests. T6–T8, and fixing the bugs in section 6, are later
-work (one PR per fix). D7 (moving helpers to the toolbox) is deferred until
-the toolkit gets its own test work. The `toolbox` submodule (ProgSnapToolkit) has its own suite
-(`toolbox/tests`), which is out of scope except where section 4 suggests
-moving shared infrastructure there.
+Status (2026-10-09): **T0–T5 are done and merged to `dev`. The bug fixes are
+in progress.** See **section 9** for where things stand and what's next.
+T6–T8 are later work. D7 (moving helpers to the toolbox) is deferred until
+the toolkit gets its own test work. The `toolbox` submodule
+(ProgSnapToolkit) has its own suite (`toolbox/tests`), which is out of scope
+except where section 4 suggests moving shared infrastructure there.
 
 This doc is the durable record for this work: the infrastructure decisions,
 the sub-task breakdown, and the **decisions log** (section 8), where answers
@@ -700,3 +699,73 @@ For each sub-task:
     longer blocks the event loop).
 * **D18** (T5): Pool exhaustion? **503 with `Retry-After`.** → B25. Also
   check what the extension does on a 503. 2026-10-09
+
+---
+
+## 9. Where things stand (handoff, 2026-10-09)
+
+Section 6's per-bug notes are updated by each fix PR; this section is the
+overview. Update it when a batch of work lands.
+
+### Merged to `dev`
+
+* T0–T5 test suite (#5, via `feature/tests`).
+* B14: error details stored (#3). B15: credentials checked before logging
+  invalid `/events` bodies (#4).
+* B7 fix (`LinkAssignmentMap` as a hand-written model with a hash key, plus
+  a migration), from before the PR workflow.
+
+### Open PRs (against `dev`), one per fix unless noted
+
+| PR | Fixes | Notes |
+|---|---|---|
+| #6 | B5, B6, B8, B13, B23, plus `min_items` → `min_length` | Bundle of trivial fixes |
+| #7 | B1 | |
+| #8 | B2 | Adds `_RecordRequestBody` ASGI middleware. **Conflicts with #13** on one import line in `main.py`; rebase whichever merges second |
+| #9 | B10 | |
+| #10 | B16 | Check whether the instructor client groups Submits by `ParentEventID` |
+| #11 | B12 + B19 | Same function, so bundled |
+| #12 | B20 | |
+| #13 | B21 | See #8 |
+| #14 | B25 | Pool-exhaustion test drops to ~3 s |
+| #15 | B26 | Startup now fails on schema errors: **deploy note** in the PR |
+| #16 | Partial-write tests | Tests only; outcomes pinned as `[inferred]` OK |
+
+### Still to do (no input needed)
+
+* **B18 + D17**: run the blocking DB work in `google_callback` and the
+  `main.py` exception handlers off the event loop (threadpool). Catch the
+  duplicate-user `IntegrityError` and re-select. Make
+  `test_simultaneous_first_logins_create_one_user` a real race test
+  (barrier). **Wait until #8, #13, #14 and #15 are merged**; they all touch
+  the same handlers.
+* After all of the above merges: re-run the suite, and update section 6's
+  status line and section 5's per-file `xfail` lists, which still describe
+  the pre-fix state.
+
+### Waiting on design discussion (GitHub issues)
+
+* B22, unique `EventID`s: #17. Includes performance notes and the
+  auto-increment `id` idea.
+* B17, late-synced logs never mapped: #18. Leaning towards an
+  upsert-only periodic full recompute behind `GET_LOCK`. Production fix =
+  clear the table and recompute.
+* B3, the dead `MySQLdb.OperationalError` handler (remove or fix?): #19.
+* B9, the mapping's `CodeStateID` isn't updated on resubmission: #20.
+* The toolbox side of B14 (`get_table`'s case-insensitive lookup works on
+  readers but not writers): CSSPLICE/ProgSnapToolkit#1. Provena is
+  unaffected now.
+
+### Environment notes
+
+* The bug-fix PRs were made from a second worktree,
+  `../ProvenaServer-fixes`, to avoid clashing with branch switches in the
+  main checkout. It reuses the main checkout's `.conda` env and needs its
+  own copy of `tests/test_config.yaml`. Remove it with
+  `git worktree remove ../ProvenaServer-fixes` when no longer needed.
+* `gh` must be logged in as `thomaswp`. The `twprice_ncstate` enterprise
+  account can't create PRs or issues in `provena-code`.
+* `tests/test_startup.py` (in #15) re-imports `provena.main` and
+  `provena.api.logging.logging` to test import-time startup, and restores
+  their module state afterwards. If startup moves into a `lifespan` hook
+  (T7), replace this with plain calls.
