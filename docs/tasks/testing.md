@@ -49,8 +49,9 @@ history.
 2. **DB work also happens at import time.**
    * `api/logging/logging.py` creates the ProgSnap2 tables
      (`initialize_database`).
-   * `api/auth/auth.py` runs `Base.metadata.create_all`.
-   * `auth/db.py` creates an engine.
+   * `main.py` calls `provena.db.base.init_app_tables()`, which runs `create_all`
+     for the hand-written app tables plus their migrations; `provena/db/base.py`
+     creates an engine at import.
    * `api/read/common.py` builds the read factory. Because `read_config` has
      no `metadata`, this opens a reader immediately, which **reflects the
      schema once and caches it forever** (`SQLReaderTableManager`).
@@ -85,7 +86,7 @@ history.
    * Collation `utf8mb4_0900_ai_ci` is **case- *and* accent-insensitive**.
      `SubjectID = 'abc'` matches `'ABC'`, and `'café'` matches `'cafe'`.
      This affects every ID filter, the `CodeStateSection` suffix matching,
-     and the `LinkAssignmentMap` unique constraint. `0900` collations are
+     and `LinkAssignmentMap`'s `SubjectID`/`AssignmentID` key columns. `0900` collations are
      NO PAD, so trailing spaces *are* significant.
    * `STRICT_TRANS_TABLES` is on, so over-length strings **error** instead
      of silently truncating. This matters for `truncate_entry` / link-table
@@ -116,6 +117,11 @@ history.
   doesn't start with `provena_test_`.
 * The toolbox's own tests `rmtree` a *relative* `./test_data/`. Run them
   only from inside `toolbox/`.
+* On the toolbox's `provena` branch, its own suite isn't green: everything
+  under `tests/analytics` fails to collect (a provena-specific enum change
+  removed `CompileMessageType`), and 3 of the remaining 15 tests fail. All
+  of this predates the testing work. Use `--ignore=tests/analytics` and
+  compare against a baseline when changing toolbox code.
 
 ---
 
@@ -187,7 +193,6 @@ Test-side:
     has known test API keys and roles (student pattern `*@student.test`,
     instructor whitelist `prof@instructor.test`). Drop the DB at session
     end. With no `tests/test_config.yaml`, exit with a clear message.
-    Pre-create `linkassignmentmap` with the production DDL first (B7/D8).
   * `client` fixture: `TestClient(app)` used as a context manager.
   * Autouse `clean_db` fixture: `DELETE FROM` every table after each test,
     following the FK note in section 2.
@@ -366,10 +371,25 @@ IDs are stable so tests and PRs can reference them.
     first 250 chars (and are equal under the `ai_ci` collation) are treated
     as the *same* key, so the upsert in `mapping.py` would overwrite one
     file's mapping with another's.
-  * A real fix belongs in the toolbox's `SQLWriterTableManager`, which
-    would need to support MySQL prefix lengths on unique constraints (e.g.
-    a `UniqueConstraint` → `Index(..., unique=True, mysql_length=...)`), or
-    in a spec change. See D8.
+  * **Fixed** (2026-10-09), per D8: `LinkAssignmentMap` was removed from the
+    ProgSnap2 spec and is now a hand-written SQLAlchemy model
+    (`provena/assignments/models.py`) whose unique key uses a MySQL-generated
+    SHA-256 of the path (`CodeStateSectionHash`), so uniqueness is exact.
+    `provena/db/migrations.py` upgrades existing tables in place: it adds the
+    hash and `id` columns and swaps the old prefix key for the hash key.
+    Verified on throwaway DBs (fresh and legacy): identical resulting DDL,
+    existing rows kept, re-running is a no-op, and two paths sharing a
+    260-char prefix map to separate rows. T0 should turn that check into
+    regression tests (fresh schema, legacy migration, migration idempotence).
+  * Behavior change to note: uniqueness of the path is now exact (case- and
+    accent-*sensitive*), while the rest of the system compares paths under
+    the `ai_ci` collation.
+  * Still open: startup (`logging.py`, and `init_app_tables` in `main.py`)
+    still swallows schema-init errors, so a future DDL failure would again
+    leave a half-created DB silently (D9).
+  * Near miss: `codestates`' unique key `(CodeStateID, CodeStateSection)` is
+    (255 + 512) × 4 = 3068 bytes, just under the limit. Widening either
+    column would hit B7 again there.
 
 Open behavior questions (not clearly bugs):
 * **Q-a.** `/events` returns **200** for malformed input after logging it as
@@ -453,13 +473,18 @@ For each sub-task:
 * **D7** (infra): Shared test helpers in the toolbox? *Pending.* Proposal:
   build them in `tests/support/` first, then move them to
   `progsnap2.testing` once stable (section 4).
-* **D8** (T0, B7): How should the test DB get a schema that matches
-  production, given that the generator can't create `LinkAssignmentMap` on
-  MySQL? *Pending.* Proposal: in T0, the conftest pre-creates
-  `linkassignmentmap` with the production DDL (prefix index
-  `CodeStateSection(250)`) before importing the app. The generator then
-  skips the existing table (`create_all` is checkfirst) and creates the
-  rest, so tests run against the same schema as production. Add a
-  `xfail(strict=True)` test that the generator alone produces a complete
-  schema on a fresh DB (B7). Fix B7 itself separately, probably in the
-  toolbox.
+* **D8** (B7): How to fix `LinkAssignmentMap`'s too-long unique key?
+  **Remove it from the ProgSnap2 spec and define it as a hand-written
+  SQLAlchemy model** (like the auth tables), with a unique key on a hash of
+  the path, plus an in-place migration for existing DBs. The spec, and the
+  toolbox's spec machinery, stay focused on the ProgSnap2 format and don't
+  grow SQL-specific features. Considered and rejected: a prefix index (lossy
+  uniqueness; production's longest path is already 241 chars), and narrowing
+  the ID columns. 2026-10-09
+* **D9** (B7 follow-up): Should startup **fail loudly** if schema
+  initialization fails, instead of logging and serving against a partial
+  schema? *Pending.* The trade-off: a DB that's briefly unreachable at boot
+  would then stop the service from starting, instead of letting it limp
+  along until the DB is back (check `provena.service`'s `Restart=` policy).
+  Proposal: fail loudly on DDL errors, but keep tolerating connection
+  errors.

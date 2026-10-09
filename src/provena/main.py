@@ -16,6 +16,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from provena.api.logging.logging import add_error_event, add_malformatted_events
 from provena.config.configs import api_config, auth_config
+from provena.db.base import init_app_tables
 import provena.api
 
 # Set python's logging level to uvicorns if uvicorn is being used
@@ -52,6 +53,14 @@ app.add_middleware(
     secret_key=auth_config.session_secret_key,
     https_only=not _allow_insecure_cookies,
 )
+
+# Create/upgrade the hand-written (non-ProgSnap2) app tables -- see
+# provena.db.base. The ProgSnap2 logging tables are created separately, when
+# provena.api.logging.logging is imported above.
+try:
+    init_app_tables()
+except Exception as e:
+    logger.error(f"Error initializing app tables: {e}")
 
 for module_info in pkgutil.walk_packages(provena.api.__path__, provena.api.__name__ + "."):
     # logger.info(f"Loading API module: {module_info.name}")

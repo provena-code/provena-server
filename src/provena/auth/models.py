@@ -5,7 +5,7 @@ from typing import List, Optional
 from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from provena.auth.db import Base
+from provena.db.base import Base
 
 
 def _new_id() -> str:

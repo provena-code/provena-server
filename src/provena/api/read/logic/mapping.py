@@ -13,9 +13,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 
+from provena.assignments.models import AssignmentMapping
+
 
 def get_mapping_table(session: Session, table_manager: SQLTableManager) -> Table:
-    mapping_table =  table_manager.get_table("linkassignmentmap")
+    mapping_table = AssignmentMapping.__table__
     main_table = table_manager.get_table(CoreTables.MainTable)
     update_mapping_table(session, main_table, mapping_table)
     return mapping_table
