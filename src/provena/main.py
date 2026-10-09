@@ -14,6 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
 
+from progsnap2.spec.datatypes import MAX_STRING_LENGTH
+
 from provena.api.logging.logging import add_error_event, add_malformatted_events
 from provena.auth.roles import api_key_header, require_student_role
 from provena.config.configs import api_config, auth_config
@@ -54,6 +56,46 @@ app.add_middleware(
     secret_key=auth_config.session_secret_key,
     https_only=not _allow_insecure_cookies,
 )
+
+# Scope key under which _RecordRequestBody keeps the body it has seen.
+_RECORDED_BODY_KEY = "provena.recorded_body"
+# Enough for any body that fits in LinkLoggingError.RequestBody, which is
+# truncated to this length anyway.
+_MAX_RECORDED_BODY_BYTES = MAX_STRING_LENGTH
+
+
+class _RecordRequestBody:
+    """
+    Keeps a copy of the request body in the ASGI scope as the app reads it,
+    so global_exception_handler can log it. That handler runs in Starlette's
+    outermost ServerErrorMiddleware, after the endpoint has consumed the
+    body, and the Request it's given can't read the body again (B2).
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        chunks = []
+        scope[_RECORDED_BODY_KEY] = chunks
+        size = 0
+
+        async def recording_receive():
+            nonlocal size
+            message = await receive()
+            if message["type"] == "http.request" and size < _MAX_RECORDED_BODY_BYTES:
+                chunk = message.get("body", b"")[:_MAX_RECORDED_BODY_BYTES - size]
+                chunks.append(chunk)
+                size += len(chunk)
+            return message
+
+        await self.app(scope, recording_receive, send)
+
+
+app.add_middleware(_RecordRequestBody)
 
 # Create/upgrade the hand-written (non-ProgSnap2) app tables -- see
 # provena.db.base. The ProgSnap2 logging tables are created separately, when
@@ -142,13 +184,9 @@ async def db_handler(request: Request, exc: OperationalError):
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {exc}")
     try:
-        request = None
-        try:
-            request = await request.body()
-            request = request.decode("utf-8")
-        except Exception as e:
-            pass
-        add_error_event(f"Internal server error: {exc}", request)
+        # Only the part of the body the app read before failing (if any).
+        body = b"".join(request.scope.get(_RECORDED_BODY_KEY, [])).decode("utf-8", errors="replace")
+        add_error_event(f"Internal server error: {exc}", body)
     except Exception as e:
         logger.error(f"Error logging internal server error: {e}")
     return JSONResponse(
