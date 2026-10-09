@@ -58,7 +58,6 @@ def test_database_operational_error_has_its_own_response(app, lenient_client):
     assert response.json() == {"detail": "Database Operational Error"}
 
 
-@pytest.mark.xfail(reason="B25 (D18): an exhausted connection pool is a generic 500, not a retryable 503")
 def test_pool_timeout_is_a_retryable_503(app, lenient_client):
     from provena.api.logging.logging import create_writer
 
@@ -72,4 +71,5 @@ def test_pool_timeout_is_a_retryable_503(app, lenient_client):
     finally:
         app.dependency_overrides.pop(create_writer)
     assert response.status_code == 503
-    assert "retry-after" in response.headers
+    assert response.headers["retry-after"] == "5"
+    assert logging_error_rows() == [] and main_table_rows() == []

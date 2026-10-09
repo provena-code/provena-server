@@ -12,6 +12,7 @@ from fastapi.exception_handlers import http_exception_handler, request_validatio
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 from starlette.middleware.sessions import SessionMiddleware
 
 from provena.api.logging.logging import add_error_event, add_malformatted_events
@@ -127,6 +128,23 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
                 logger.info(f"Error reading request body for logging: {e}")
 
     return await request_validation_exception_handler(request, exc)
+
+# Seconds a client should wait before retrying after a 503.
+POOL_TIMEOUT_RETRY_AFTER_SECONDS = 5
+
+
+@app.exception_handler(PoolTimeoutError)
+async def pool_timeout_handler(request: Request, exc: PoolTimeoutError):
+    # Every pooled DB connection was busy for pool_timeout seconds. That's
+    # transient, so tell the client to retry (D18). Deliberately doesn't try
+    # to record a LoggingError: that would wait on the same exhausted pool.
+    logger.error(f"Database connection pool exhausted: {exc}")
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Server busy, try again shortly"},
+        headers={"Retry-After": str(POOL_TIMEOUT_RETRY_AFTER_SECONDS)},
+    )
+
 
 @app.exception_handler(OperationalError)
 async def db_handler(request: Request, exc: OperationalError):
