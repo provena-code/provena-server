@@ -3,8 +3,8 @@
 Status: **T0–T5 done** (2026-10-09): 397 tests pass and 41 are `xfail`
 for known bugs (B#), in about 21 s. Decisions D9–D18 are answered and
 reflected in the tests. T6–T8, and fixing the bugs in section 6, are later
-work (one PR per fix). D7 (moving helpers to the toolbox) comes after this
-commit. D17 needs a final call. The `toolbox` submodule (ProgSnapToolkit) has its own suite
+work (one PR per fix). D7 (moving helpers to the toolbox) is deferred until
+the toolkit gets its own test work. The `toolbox` submodule (ProgSnapToolkit) has its own suite
 (`toolbox/tests`), which is out of scope except where section 4 suggests
 moving shared infrastructure there.
 
@@ -167,8 +167,8 @@ and would make more sense in ProgSnapToolkit long-term:
 and design them so they don't depend on provena. Once they've settled
 (after T2–T3), move them to `progsnap2.testing` in one deliberate submodule
 bump. Doing it the other way round means a toolbox PR plus a submodule bump
-for every tweak while the API is still changing. *Your call. Logged as D7,
-pending.*
+for every tweak while the API is still changing. **Deferred (D7):** they
+stay in `tests/support/` for now.
 
 ---
 
@@ -597,9 +597,14 @@ For each sub-task:
   2026-10-09
 * **D6** (scope): Node bridge? **Out of scope**, since it isn't currently
   used. 2026-10-09
-* **D7** (infra): Shared test helpers in the toolbox? **Yes, after the T1–T5
-  commit:** move `tests/support/databases.py` and `progsnap2_events.py` to
-  `progsnap2.testing`. 2026-10-09
+* **D7** (infra): Move the shared test helpers (`tests/support/databases.py`,
+  `progsnap2_events.py`) to the toolbox as `progsnap2.testing`? **Not yet.**
+  Do it when ProgSnapToolkit gets its own, more extensive testing work.
+  Moving them earlier gains nothing, and until then changes only have to
+  be made in one place. When they move, they should go into the toolkit's
+  *main* branch, not the `provena` branch the submodule tracks, which has
+  provena-specific changes that aren't compatible with main. Keep the
+  helpers free of provena imports so they can move as-is. 2026-10-09
 * **D8** (B7): How to fix `LinkAssignmentMap`'s too-long unique key?
   **Remove it from the ProgSnap2 spec and define it as a hand-written
   SQLAlchemy model** (like the auth tables), with a unique key on a hash of
@@ -667,7 +672,8 @@ For each sub-task:
     A more robust model (e.g. viewing by individual submission rather
     than by assignment) is possible future work.
   * Briefly logged as B24 and then withdrawn. 2026-10-09
-* **D17** (T5): The first-login race. *Pending; more context below.*
+* **D17** (T5): The first-login race. **Make both requests succeed**, fixed in
+  the same PR as B18. 2026-10-09
   * When it can happen: the same person's very first login, twice at once,
     e.g. VS Code and the web app finishing Google's redirect within
     milliseconds of each other. Today it can't happen at all, because the
@@ -679,7 +685,9 @@ For each sub-task:
     insert, roll back, and re-select the user by email. The same applies
     to the identity insert, which has its own unique key on
     `(provider, subject)`.
-  * Recommendation: do that fix together with B18, since it's the fix that
-    exposes the race.
+  * Do that fix together with B18, since it's the fix that exposes the race.
+    Then turn `test_simultaneous_first_logins_create_one_user` into a real
+    race test (the barrier approach from T5 works once the handler no
+    longer blocks the event loop).
 * **D18** (T5): Pool exhaustion? **503 with `Retry-After`.** → B25. Also
   check what the extension does on a 503. 2026-10-09
