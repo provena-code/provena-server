@@ -513,6 +513,8 @@ each one's test flips when it's done.
   an allowlist entry without a port, and vice versa.
 * **B20 (D11).** A valid submit key on a student or instructor route should
   get 403 `insufficient_role`, not 401.
+  * **Fixed** (2026-10-09, `fix/b20-submit-key-forbidden`): `_require_role`
+    returns 403 for a submit key when no login satisfies the route.
 * **B21 (D12).** `/events` should overwrite a client-supplied
   `ServerTimestamp` and say so in the response's warnings.
 * **B22 (D13).** Duplicate `EventID`s: see D13 for the intended behavior.

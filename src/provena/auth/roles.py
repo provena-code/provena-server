@@ -97,6 +97,11 @@ def _require_role(
         # A real, currently-valid identity -- it just doesn't have this role.
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="insufficient_role")
 
+    if _matches_any_key(api_key, student.submit_api_keys):
+        # A valid credential, but only for /submit. Not reauth_required: the
+        # autograder can't log in, so that would send it nowhere useful.
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="insufficient_role")
+
     raise _reauth_required()
 
 
