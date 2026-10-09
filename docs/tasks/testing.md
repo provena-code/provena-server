@@ -313,8 +313,8 @@ The full run takes about 2 s.
   tolerated. `xfail`: B26.
 * Partial writes across separate commits (`_add_error_event`'s two
   commits, `google_callback` then `issue_token`) aren't forced yet. With
-  B14, the link-table write *always* fails today, so the partial state is
-  the normal state; revisit after B14 is fixed.
+  B14 (now fixed), the link-table write always failed, so the partial state
+  was the normal state. Worth adding now.
 
 ### T4: Read endpoints — done
 
@@ -472,9 +472,15 @@ each one's test flips when it's done.
   `quoted_name.lower()` returns the name unchanged, so the map is identity. The
   lookup fails and is logged and swallowed. Every `LoggingError` event in
   production has no `LinkLoggingError` row, so the error text and request
-  body are lost. Two fixes are possible: the one-line provena fix
-  (`'LinkLoggingError'`), and the real fix in the toolbox's `get_table`
-  (`str(name).lower()`).
+  body are lost.
+  * **Fixed in provena** (2026-10-09, `fix/b14-logging-error-details`):
+    `_add_error_event` now passes the exact name `'LinkLoggingError'`.
+  * **Still open in the toolbox:** `SQLTableManager.get_table`'s lowercase
+    map should use `str(name).lower()`. Fix it on the toolkit's main
+    branch, then bring it into the `provena` branch.
+  * Side effect: the pool-exhaustion test got slower (~6 s → ~10 s). Each
+    error handler now also writes the link row, and that second checkout
+    also waits with the event loop blocked (B18).
 * **B15. A body that isn't valid JSON is logged without authentication.**
   JSON decoding fails before dependencies run, so `/events`' validation
   handler writes a `LoggingError` event (plus a link row, once B14 is

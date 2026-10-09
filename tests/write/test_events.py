@@ -163,7 +163,6 @@ def test_over_length_value_is_logged_as_an_error_event(post):
     assert row["LoggingErrorID"]
 
 
-@pytest.mark.xfail(reason="B14: LinkLoggingError rows are never written (toolbox get_table lookup is case-sensitive)")
 def test_over_length_value_error_details_are_recorded(post):
     too_long = "s" * 300
     response = post([event("Session.Start", SubjectID=too_long)])
@@ -232,7 +231,6 @@ def test_non_json_body_is_logged_as_an_error_event(client):
     assert [r["EventType"] for r in main_table_rows()] == ["LoggingError"]
 
 
-@pytest.mark.xfail(reason="B14: LinkLoggingError rows are never written")
 def test_non_json_body_is_recorded_verbatim(client):
     client.post("/events", content=b"this is {not json", headers={
         **student_headers(), "Content-Type": "application/json",
@@ -247,7 +245,6 @@ def test_non_list_body_is_logged_as_an_error_event(post):
     assert [r["EventType"] for r in main_table_rows()] == ["LoggingError"]
 
 
-@pytest.mark.xfail(reason="B14: LinkLoggingError rows are never written")
 def test_non_list_body_is_recorded(post):
     post({"EventType": "Session.Start"})
     [error] = logging_error_rows()

@@ -33,7 +33,7 @@ def test_unhandled_error_is_a_500_and_logged_as_an_error_event(lenient_client, f
     assert [r["EventType"] for r in main_table_rows()] == ["LoggingError"]
 
 
-@pytest.mark.xfail(reason="B2: the handler sets request = None before reading the body (and B14: link rows aren't written)")
+@pytest.mark.xfail(reason="B2: the handler sets request = None before reading the body")
 def test_unhandled_error_records_the_request_body(lenient_client, failing_events):
     lenient_client.post("/events", json=[event("Session.Start", SubjectID="find-me")], headers=student_headers())
     [error] = logging_error_rows()
