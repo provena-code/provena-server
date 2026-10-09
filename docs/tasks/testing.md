@@ -522,6 +522,10 @@ each one's test flips when it's done.
   mapped.
 * **B25 (D18).** Pool exhaustion (`sqlalchemy.exc.TimeoutError`) should be
   a 503 with `Retry-After`.
+  * **Fixed** (2026-10-09, `fix/b25-pool-timeout-503`): a
+    `sqlalchemy.exc.TimeoutError` handler returns 503 with `Retry-After: 5`
+    and doesn't touch the DB. The pool-exhaustion test now takes ~3 s
+    instead of ~10 s.
 * **B26 (D9).** A schema/DDL error at startup should stop the server. A
   connection error should still be tolerated.
 

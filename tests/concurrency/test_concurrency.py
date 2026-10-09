@@ -132,14 +132,9 @@ def test_pool_exhaustion_fails_fast_without_deadlock(live_server, slow_writer):
     responses = run_concurrently(live_server, [("POST", "/events", {"json": [], "headers": headers}) for _ in range(12)])
 
     elapsed = time.monotonic() - started
-    # The two that time out fail; D18 wants a 503 + Retry-After there, which
-    # tests/write/test_error_handlers.py checks without the wait (B25).
-    assert Counter(r.status_code for r in responses)[200] == 10
-    assert sorted(r.status_code for r in responses)[10:] in ([500, 500], [503, 503])
-    # Bounded, so no deadlock -- but slower than it should be, because of
-    # B18: each failed request's error handler logs the error *on the event
-    # loop*, which also stops the ten holders from finishing and returning
-    # their connections. Each handler makes two checkouts (error event, then
-    # LinkLoggingError row), each of which can wait the full 2s timeout:
-    # ~2s + 2 handlers x 2 checkouts x 2s = ~10s, not ~hold (3s).
-    assert elapsed < 20
+    # The two that time out get a retryable 503 (D18).
+    assert Counter(r.status_code for r in responses) == {200: 10, 503: 2}
+    assert all(r.headers["retry-after"] for r in responses if r.status_code == 503)
+    # About the hold time (3s): the 503 handler doesn't touch the DB, so it
+    # neither waits on the exhausted pool nor blocks the event loop (B18).
+    assert elapsed < 6
