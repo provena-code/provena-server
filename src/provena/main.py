@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
 
-from provena.api.logging.logging import add_error_event, add_malformatted_events
+from provena.api.logging.logging import add_error_event, add_malformatted_events, discard_client_server_timestamps
 from provena.auth.roles import api_key_header, require_student_role
 from provena.config.configs import api_config, auth_config
 from provena.db.base import SessionLocal, init_app_tables
@@ -108,7 +108,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             try:
                 body = await request.json()
                 if isinstance(body, list):
+                    timestamp_warnings = discard_client_server_timestamps(body)
                     result = add_malformatted_events(body)
+                    result.warnings[:0] = timestamp_warnings
                     result.errors.insert(0, f"Some events were malformatted and could not be parsed correctly: {exc_str}")
                     return JSONResponse(
                         content=jsonable_encoder(result),

@@ -71,11 +71,21 @@ def test_missing_event_specific_columns_are_stored_with_a_warning(post):
     assert len(main_table_rows()) == 1
 
 
-@pytest.mark.xfail(reason="B21 (D12): a client-supplied ServerTimestamp is kept instead of overwritten")
 def test_client_server_timestamp_is_overwritten_with_a_warning(post):
     response = post([event("Session.Start", ServerTimestamp="1999-01-01T00:00:00")])
     assert main_table_rows()[0]["ServerTimestamp"] != "1999-01-01T00:00:00"
     assert any("ServerTimestamp" in warning for warning in response.json()["warnings"])
+
+
+def test_client_server_timestamp_is_overwritten_in_the_malformed_fallback(post):
+    # The validation handler's path (missing ToolInstances), not the endpoint's.
+    response = post([event("Session.Start", ToolInstances=None, ServerTimestamp="1999-01-01T00:00:00")])
+    assert main_table_rows()[0]["ServerTimestamp"] != "1999-01-01T00:00:00"
+    assert any("ServerTimestamp" in warning for warning in response.json()["warnings"])
+
+
+def test_no_timestamp_warning_without_a_client_server_timestamp(post):
+    assert post([event("Session.Start")]).json()["warnings"] == []
 
 
 def test_subject_id_is_not_tied_to_the_login(post):

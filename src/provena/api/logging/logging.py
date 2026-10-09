@@ -91,12 +91,14 @@ def add_events_with_code_states(events: List[MainTableEvent], writer: SQLWriter 
     the events. It is used to map multiple events to the same code state in this request.
     """
     events = [event.model_dump(exclude_none=True) for event in events]
+    timestamp_warnings = discard_client_server_timestamps(events)
     if api_config.add_server_timestamps:
         writer.add_server_timestamps(events)
 
     add_codestate_ids(events)
 
     result = writer.add_events(events)
+    result.warnings[:0] = timestamp_warnings
     if result.success:
         return result
 
@@ -113,6 +115,24 @@ def add_events_with_code_states(events: List[MainTableEvent], writer: SQLWriter 
         # Return the original failed result
         logger.error(f"Also failed to log malformatted events.")
         return result
+
+def discard_client_server_timestamps(events: list) -> list[str]:
+    """
+    Removes any client-supplied ServerTimestamp so the server's own is used
+    (D12): Submit ServerTimestamps drive the assignment mapping, so clients
+    mustn't be able to set them. Returns warnings to include in the
+    response. Does nothing if the server isn't adding timestamps.
+    """
+    if not api_config.add_server_timestamps:
+        return []
+    count = 0
+    for event in events:
+        if isinstance(event, dict) and event.pop(Cols.ServerTimestamp, None) is not None:
+            count += 1
+    if count == 0:
+        return []
+    return [f"Ignored ServerTimestamp on {count} event(s); the server sets ServerTimestamp."]
+
 
 def add_malformatted_events(events: list[dict]) -> LogResult:
     """
